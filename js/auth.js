@@ -26,6 +26,23 @@ const Auth = (function() {
         });
     }
 
+    function isValidEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v||'');}
+    function mapAuthError(err){
+        const code = (err && err.code ? String(err.code) : '').toLowerCase();
+        const msg = (err && err.message ? String(err.message) : '').toLowerCase();
+        const text = `${code} ${msg}`;
+        if (text.includes('email-already-in-use') || text.includes('email_exists')) return 'Email already registered. Please log in.';
+        if (text.includes('invalid-email')) return 'Please enter a valid email address';
+        if (text.includes('weak-password')) return 'Password must be at least 6 characters';
+        if (text.includes('wrong-password') || text.includes('invalid-credential') || text.includes('invalid-login-credentials')) return 'Incorrect email or password';
+        if (text.includes('user-not-found')) return 'No account found for this email';
+        if (text.includes('user-disabled')) return 'This account has been disabled';
+        if (text.includes('too-many-requests')) return 'Too many attempts. Please try again later';
+        if (text.includes('network-request-failed')) return 'Network error. Check your connection and try again';
+        if (text.includes('operation-not-allowed')) return 'Email/Password sign-in is disabled in Firebase project';
+        return 'Authentication error. Please try again.';
+    }
+
     // Handle student login
     async function handleStudentLogin(e) {
         e.preventDefault();
@@ -33,9 +50,9 @@ const Auth = (function() {
         const password = document.getElementById('studentPassword').value;
         const rememberMe = document.getElementById('rememberMe').checked;
         
-        if (!email || !password) return showAlert('Please enter email and password', 'danger');
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) return showAlert('Please enter a valid email', 'danger');
+        if (!email){ showAlert('Email is required', 'danger'); document.getElementById('studentEmail').focus(); return; }
+        if (!isValidEmail(email)){ showAlert('Please enter a valid email', 'danger'); document.getElementById('studentEmail').focus(); return; }
+        if (!password){ showAlert('Password is required', 'danger'); document.getElementById('studentPassword').focus(); return; }
         
         try {
             if (window.FirebaseAPI?.signIn) {
@@ -63,7 +80,8 @@ const Auth = (function() {
             App.logActivity('Student logged in', current?.email);
             showAlert(`Welcome back, ${current?.fullName || current?.name || 'Student'}!`, 'success');
         } catch (err) {
-            showAlert(err?.message || 'Login failed', 'danger');
+            showAlert(mapAuthError(err), 'danger');
+            document.getElementById('studentPassword').focus();
         }
     }
     
@@ -74,9 +92,9 @@ const Auth = (function() {
         const password = document.getElementById('adminPassword').value;
         const rememberMe = document.getElementById('rememberMe').checked;
         
-        if (!email || !password) return showAlert('Please enter email and password', 'danger');
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) return showAlert('Please enter a valid email', 'danger');
+        if (!email){ showAlert('Email is required', 'danger'); document.getElementById('adminEmail').focus(); return; }
+        if (!isValidEmail(email)){ showAlert('Please enter a valid email', 'danger'); document.getElementById('adminEmail').focus(); return; }
+        if (!password){ showAlert('Password is required', 'danger'); document.getElementById('adminPassword').focus(); return; }
         
         try {
             if (window.FirebaseAPI?.signIn) {
@@ -103,7 +121,8 @@ const Auth = (function() {
             App.logActivity('Admin logged in', current?.email);
             showAlert(`Welcome back, ${current?.fullName || current?.name || 'Admin'}!`, 'success');
         } catch (err) {
-            showAlert(err?.message || 'Login failed', 'danger');
+            showAlert(mapAuthError(err), 'danger');
+            document.getElementById('adminPassword').focus();
         }
     }
     
@@ -124,15 +143,12 @@ const Auth = (function() {
             role: 'student',
             registeredAt: new Date().toISOString()
         };
-        
-        // Validation
-        if (formData.password !== formData.confirmPassword) {
-            return showAlert('Passwords do not match', 'danger');
-        }
-        
-        if (formData.password.length < 6) {
-            return showAlert('Password must be at least 6 characters long', 'danger');
-        }
+        if (!formData.id){ showAlert('Student ID is required', 'danger'); document.getElementById('studentId').focus(); return; }
+        if (!formData.fullName){ showAlert('Full name is required', 'danger'); document.getElementById('studentFullName').focus(); return; }
+        if (!isValidEmail(formData.email)){ showAlert('Please enter a valid email', 'danger'); document.getElementById('studentRegEmail').focus(); return; }
+        if (!formData.password){ showAlert('Password is required', 'danger'); document.getElementById('studentRegPassword').focus(); return; }
+        if (formData.password.length < 6){ showAlert('Password must be at least 6 characters long', 'danger'); document.getElementById('studentRegPassword').focus(); return; }
+        if (formData.password !== formData.confirmPassword){ showAlert('Passwords do not match', 'danger'); document.getElementById('confirmStudentPassword').focus(); return; }
         try {
             if (window.FirebaseAPI?.registerUser) {
                 await window.FirebaseAPI.registerUser(formData.email, formData.password, 'student', {
@@ -154,7 +170,7 @@ const Auth = (function() {
             App.logActivity('New student registered', formData.email);
             showAlert('Registration successful! Please log in.', 'success');
         } catch (err) {
-            return showAlert(err?.message || 'Registration failed', 'danger');
+            return showAlert(mapAuthError(err), 'danger');
         }
         
         // Switch to login
@@ -184,15 +200,12 @@ const Auth = (function() {
             role: 'admin',
             registeredAt: new Date().toISOString()
         };
-        
-        // Validation
-        if (formData.password !== formData.confirmPassword) {
-            return showAlert('Passwords do not match', 'danger');
-        }
-        
-        if (formData.password.length < 8) {
-            return showAlert('Admin password must be at least 8 characters long', 'danger');
-        }
+        if (!formData.id){ showAlert('Admin ID is required', 'danger'); document.getElementById('adminId').focus(); return; }
+        if (!formData.fullName){ showAlert('Full name is required', 'danger'); document.getElementById('adminFullName').focus(); return; }
+        if (!isValidEmail(formData.email)){ showAlert('Please enter a valid email', 'danger'); document.getElementById('adminRegEmail').focus(); return; }
+        if (!formData.password){ showAlert('Password is required', 'danger'); document.getElementById('adminRegPassword').focus(); return; }
+        if (formData.password.length < 8){ showAlert('Admin password must be at least 8 characters long', 'danger'); document.getElementById('adminRegPassword').focus(); return; }
+        if (formData.password !== formData.confirmPassword){ showAlert('Passwords do not match', 'danger'); document.getElementById('confirmAdminPassword').focus(); return; }
         try {
             if (window.FirebaseAPI?.registerUser) {
                 await window.FirebaseAPI.registerUser(formData.email, formData.password, 'admin', {
@@ -212,7 +225,7 @@ const Auth = (function() {
             App.logActivity('New admin registered', formData.email);
             showAlert('Admin registration successful! Please log in.', 'success');
         } catch (err) {
-            return showAlert(err?.message || 'Registration failed', 'danger');
+            return showAlert(mapAuthError(err), 'danger');
         }
         
         // Switch to login
@@ -314,6 +327,30 @@ const Auth = (function() {
             console.log('Default admin created:', defaultAdmin);
         }
         
+        // Sync UI with Firebase auth state if available
+        if (window.FirebaseAPI?.onAuthStateChanged) {
+            window.FirebaseAPI.onAuthStateChanged(async (fbUser) => {
+                if (fbUser) {
+                    try {
+                        const profile = await window.FirebaseAPI.getUserProfile(fbUser.uid);
+                        const userData = profile ? { ...profile, uid: fbUser.uid, email: fbUser.email } : { uid: fbUser.uid, email: fbUser.email };
+                        localStorage.setItem('currentUser', JSON.stringify(userData));
+                        if (typeof App !== 'undefined') {
+                            App.setCurrentUser(userData);
+                            App.loadDashboard();
+                        }
+                    } catch (_) {}
+                } else {
+                    localStorage.removeItem('currentUser');
+                    if (typeof App !== 'undefined') {
+                        // Show login button/modal and reset main content
+                        const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                        loginModal.show();
+                    }
+                }
+            });
+        }
+
         // Event listeners for login forms
         const loginForm = document.getElementById('loginForm');
         if (loginForm) {
