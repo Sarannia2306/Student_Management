@@ -1,0 +1,538 @@
+// Profile Page Module
+const ProfilePage = (function() {
+    // Initialize the profile page
+    function init() {
+        loadProfileData();
+        setupEventListeners();
+    }
+
+    // Load profile data for the current user
+    function loadProfileData() {
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        const isAdmin = currentUser.role === 'admin';
+        
+        if (isAdmin) {
+            loadAdminProfile(currentUser);
+        } else {
+            loadStudentProfile(currentUser);
+        }
+    }
+
+    // Load student profile data
+    function loadStudentProfile(student) {
+        // Disable all form fields by default
+        const formFields = `
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">My Profile</h4>
+                    <span class="badge bg-light text-primary">${student.role || 'Student'}</span>
+                </div>
+                <div class="card-body">
+                    <form id="profileForm">
+                        <div class="row mb-4">
+                            <div class="col-md-3 text-center">
+                                <div class="mb-3">
+                                    <div class="position-relative d-inline-block">
+                                        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(student.fullName || 'Student')}&background=4e73df&color=fff&size=150" 
+                                             class="rounded-circle img-thumbnail" 
+                                             alt="Profile Picture" 
+                                             style="width: 150px; height: 150px; object-fit: cover;">
+                                        <button type="button" class="btn btn-sm btn-primary position-absolute bottom-0 end-0 rounded-circle" 
+                                                style="width: 36px; height: 36px;"
+                                                data-bs-toggle="tooltip" 
+                                                data-bs-placement="bottom" 
+                                                title="Change Photo">
+                                            <i class="fas fa-camera"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="text-muted">
+                                    <small>PNG, JPG, or GIF (Max 2MB)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="fullName" class="form-label">Full Name</label>
+                                        <input type="text" class="form-control" id="fullName" value="${student.fullName || ''}" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="studentId" class="form-label">Student ID</label>
+                                        <input type="text" class="form-control" id="studentId" value="${student.id || ''}" readonly>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="email" class="form-label">Email Address</label>
+                                        <input type="email" class="form-control" id="email" value="${student.email || ''}" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="phone" class="form-label">Phone Number</label>
+                                        <input type="tel" class="form-control" id="phone" value="${student.phone || ''}">
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="icNumber" class="form-label">IC Number</label>
+                                        <input type="text" class="form-control" id="icNumber" value="${student.icNumber || ''}">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="academicLevel" class="form-label">Academic Level</label>
+                                        <select class="form-select" id="academicLevel" ${student.id ? 'disabled' : ''}>
+                                            <option value="">Select Level</option>
+                                            <option value="Foundation" ${student.academicLevel === 'Foundation' ? 'selected' : ''}>Foundation</option>
+                                            <option value="Diploma" ${student.academicLevel === 'Diploma' ? 'selected' : ''}>Diploma</option>
+                                            <option value="Degree" ${student.academicLevel === 'Degree' ? 'selected' : ''}>Degree</option>
+                                            <option value="A-levels" ${student.academicLevel === 'A-levels' ? 'selected' : ''}>A-levels</option>
+                                            <option value="Masters" ${student.academicLevel === 'Masters' ? 'selected' : ''}>Masters</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12 mb-3">
+                                        <label for="address" class="form-label">Address</label>
+                                        <textarea class="form-control" id="address" rows="2">${student.address || ''}</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">Change Password</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label for="currentPassword" class="form-label">Current Password</label>
+                                        <div class="input-group">
+                                            <input type="password" class="form-control" id="currentPassword">
+                                            <button class="btn btn-outline-secondary toggle-password" type="button">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="newPassword" class="form-label">New Password</label>
+                                        <div class="input-group">
+                                            <input type="password" class="form-control" id="newPassword">
+                                            <button class="btn btn-outline-secondary toggle-password" type="button">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                        <div class="form-text">Leave blank to keep current password</div>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="confirmNewPassword" class="form-label">Confirm New Password</label>
+                                        <div class="input-group">
+                                            <input type="password" class="form-control" id="confirmNewPassword">
+                                            <button class="btn btn-outline-secondary toggle-password" type="button">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-outline-secondary" onclick="window.history.back()">
+                                <i class="fas fa-arrow-left me-1"></i> Back
+                            </button>
+                            <div>
+                                <button type="reset" class="btn btn-outline-secondary me-2">
+                                    <i class="fas fa-undo me-1"></i> Reset
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-1"></i> Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('mainContent').innerHTML = `
+            <div class="container-fluid py-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="mb-0">My Profile</h2>
+                    <div class="text-muted">
+                        Last updated: ${student.updatedAt ? new Date(student.updatedAt).toLocaleString() : 'Never'}
+                    </div>
+                </div>
+                ${formFields}
+            </div>
+        `;
+        
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+
+    // Load admin profile data
+    function loadAdminProfile(admin) {
+        const profileHTML = `
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Admin Profile</h4>
+                </div>
+                <div class="card-body">
+                    <form id="profileForm">
+                        <div class="row mb-4">
+                            <div class="col-md-3 text-center">
+                                <div class="mb-3">
+                                    <div class="position-relative d-inline-block">
+                                        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(admin.fullName || 'Admin')}&background=4e73df&color=fff&size=150" 
+                                             class="rounded-circle img-thumbnail" 
+                                             alt="Profile Picture" 
+                                             style="width: 150px; height: 150px; object-fit: cover;">
+                                        <button type="button" class="btn btn-sm btn-primary position-absolute bottom-0 end-0 rounded-circle" 
+                                                style="width: 36px; height: 36px;"
+                                                data-bs-toggle="tooltip" 
+                                                data-bs-placement="bottom" 
+                                                title="Change Photo">
+                                            <i class="fas fa-camera"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="text-muted">
+                                    <small>PNG, JPG, or GIF (Max 2MB)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="fullName" class="form-label">Full Name</label>
+                                        <input type="text" class="form-control" id="fullName" value="${admin.fullName || ''}" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="adminId" class="form-label">Admin ID</label>
+                                        <input type="text" class="form-control" id="adminId" value="${admin.id || ''}" readonly>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="email" class="form-label">Email Address</label>
+                                        <input type="email" class="form-control" id="email" value="${admin.email || ''}" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="phone" class="form-label">Phone Number</label>
+                                        <input type="tel" class="form-control" id="phone" value="${admin.phone || ''}">
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="icNumber" class="form-label">IC Number</label>
+                                        <input type="text" class="form-control" id="icNumber" value="${admin.icNumber || ''}">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="position" class="form-label">Position</label>
+                                        <input type="text" class="form-control" id="position" value="${admin.position || 'Administrator'}">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">Change Password</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label for="currentPassword" class="form-label">Current Password</label>
+                                        <div class="input-group">
+                                            <input type="password" class="form-control" id="currentPassword">
+                                            <button class="btn btn-outline-secondary toggle-password" type="button">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="newPassword" class="form-label">New Password</label>
+                                        <div class="input-group">
+                                            <input type="password" class="form-control" id="newPassword">
+                                            <button class="btn btn-outline-secondary toggle-password" type="button">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                        <div class="form-text">Leave blank to keep current password</div>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="confirmNewPassword" class="form-label">Confirm New Password</label>
+                                        <div class="input-group">
+                                            <input type="password" class="form-control" id="confirmNewPassword">
+                                            <button class="btn btn-outline-secondary toggle-password" type="button">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-outline-secondary" onclick="window.history.back()">
+                                <i class="fas fa-arrow-left me-1"></i> Back
+                            </button>
+                            <div>
+                                <button type="reset" class="btn btn-outline-secondary me-2">
+                                    <i class="fas fa-undo me-1"></i> Reset
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-1"></i> Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('mainContent').innerHTML = `
+            <div class="container-fluid py-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="mb-0">Admin Profile</h2>
+                    <div class="text-muted">
+                        Last updated: ${admin.updatedAt ? new Date(admin.updatedAt).toLocaleString() : 'Never'}
+                    </div>
+                </div>
+                ${profileHTML}
+            </div>
+        `;
+        
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+
+    // Setup event listeners for the profile page
+    function setupEventListeners() {
+        // Toggle password visibility
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.toggle-password')) {
+                const button = e.target.closest('.toggle-password');
+                const input = button.previousElementSibling;
+                const icon = button.querySelector('i');
+                
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.classList.remove('fa-eye');
+                    icon.classList.add('fa-eye-slash');
+                } else {
+                    input.type = 'password';
+                    icon.classList.remove('fa-eye-slash');
+                    icon.classList.add('fa-eye');
+                }
+            }
+            
+            // Handle edit button click
+            if (e.target.closest('#editProfileBtn')) {
+                e.preventDefault();
+                // Enable form fields
+                const form = document.getElementById('profileForm');
+                const inputs = form.querySelectorAll('input:not([readonly]), select, textarea');
+                inputs.forEach(input => input.disabled = false);
+                
+                // Show save button and hide edit button
+                document.getElementById('editProfileBtn').classList.add('d-none');
+                document.getElementById('saveProfileBtn').classList.remove('d-none');
+                document.getElementById('cancelEditBtn').classList.remove('d-none');
+            }
+            
+            // Handle cancel button click
+            if (e.target.closest('#cancelEditBtn')) {
+                e.preventDefault();
+                // Reload the profile data to discard changes
+                loadProfileData();
+            }
+            
+            // Handle save button click
+            if (e.target.closest('#saveProfileBtn')) {
+                e.preventDefault();
+                saveProfile();
+            }
+            
+            // Handle change password button click
+            if (e.target.closest('#changePasswordBtn')) {
+                e.preventDefault();
+                saveProfile();
+            }
+        });
+    }
+    
+    // Save profile changes
+    function saveProfile() {
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        const isAdmin = currentUser.role === 'admin';
+        
+        try {
+            // Get form data
+            const formData = {
+                fullName: document.getElementById('fullName')?.value || '',
+                email: document.getElementById('email')?.value || '',
+                phone: document.getElementById('phone')?.value || '',
+                icNumber: document.getElementById('icNumber')?.value || '',
+                updatedAt: new Date().toISOString()
+            };
+            
+            // Basic validation
+            if (!formData.fullName || !formData.email) {
+                throw new Error('Full name and email are required');
+            }
+            
+            // Email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(formData.email)) {
+                throw new Error('Please enter a valid email address');
+            }
+
+            // Route to role-specific save
+            if (isAdmin) {
+                saveAdminProfile(currentUser, formData);
+            } else {
+                saveStudentProfile(currentUser, formData);
+            }
+
+            // Handle password change if any
+            handlePasswordChange(currentUser, isAdmin);
+
+        } catch (error) {
+            console.error('Error saving profile:', error);
+            showAlert(error.message || 'An error occurred while saving the profile', 'danger');
+        }
+    }
+
+// Save student profile data
+function saveStudentProfile(currentUser, formData) {
+    // Add student-specific fields
+    formData.academicLevel = document.getElementById('academicLevel')?.value || '';
+    formData.address = document.getElementById('address')?.value || '';
+    
+    // Update student data in localStorage
+    const students = JSON.parse(localStorage.getItem('students') || '[]');
+    const studentIndex = students.findIndex(s => s.id === currentUser.id);
+    
+    if (studentIndex !== -1) {
+        students[studentIndex] = { ...students[studentIndex], ...formData };
+        localStorage.setItem('students', JSON.stringify(students));
+        
+        // Update current user data
+        const updatedUser = { ...currentUser, ...formData };
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        
+        // Disable form fields after saving
+        const form = document.getElementById('profileForm');
+        const inputs = form.querySelectorAll('input:not([readonly]), select, textarea');
+        inputs.forEach(input => input.disabled = true);
+        
+        // Show edit button and hide save/cancel buttons
+        document.getElementById('editProfileBtn').classList.remove('d-none');
+        document.getElementById('saveProfileBtn').classList.add('d-none');
+        document.getElementById('cancelEditBtn').classList.add('d-none');
+        
+        // Show success message
+        showAlert('Profile updated successfully!', 'success');
+        
+        // Log the activity
+        App.logActivity('Updated student profile', currentUser.email);
+    }
+}
+
+// Handle password change
+function handlePasswordChange(currentUser, isAdmin) {
+    const newPassword = document.getElementById('newPassword')?.value;
+    const confirmNewPassword = document.getElementById('confirmNewPassword')?.value;
+    const currentPassword = document.getElementById('currentPassword')?.value;
+    
+    if (newPassword && confirmNewPassword && currentPassword) {
+        if (newPassword === confirmNewPassword) {
+            // In a real app, you would verify the current password first
+            // For this demo, we'll just update it
+            const users = isAdmin ? 
+                JSON.parse(localStorage.getItem('admins') || '[]') : 
+                JSON.parse(localStorage.getItem('students') || '[]');
+            
+            const userIndex = users.findIndex(u => u.id === currentUser.id);
+            if (userIndex !== -1) {
+                // In a real app, you should hash the password before storing
+                users[userIndex].password = newPassword;
+                
+                if (isAdmin) {
+                    localStorage.setItem('admins', JSON.stringify(users));
+                } else {
+                    localStorage.setItem('students', JSON.stringify(users));
+                }
+                
+                // Update current user data
+                const updatedUser = { ...currentUser, password: newPassword };
+                localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+                
+                showAlert('Password changed successfully!', 'success');
+                
+                // Clear password fields
+                document.getElementById('currentPassword').value = '';
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmNewPassword').value = '';
+                
+                // Log the activity
+                App.logActivity('Changed password', currentUser.email);
+            } else {
+                throw new Error('User not found!');
+            }
+        } else {
+            throw new Error('New passwords do not match!');
+        }
+    }
+}
+
+// Show alert message
+function showAlert(message, type = 'info') {
+    // Remove any existing alerts
+    const existingAlert = document.querySelector('.alert');
+    if (existingAlert) {
+        existingAlert.remove();
+    }
+
+    // Create alert element
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.role = 'alert';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+
+    // Add alert to the page
+    const container = document.querySelector('.container-fluid') || document.body;
+    if (container.firstChild) {
+        container.insertBefore(alertDiv, container.firstChild);
+    } else {
+        container.appendChild(alertDiv);
+    }
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        try {
+            const alert = bootstrap.Alert.getOrCreateInstance(alertDiv);
+            if (alert) {
+                alert.close();
+            } else {
+                alertDiv.remove();
+            }
+        } catch (_) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+    
+    // Public API
+    return {
+        init
+    };
+})();

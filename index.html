@@ -4,53 +4,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Management System</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- Custom CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="#">Student Management</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" id="dashboardLink">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" id="studentsLink">Students</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" id="programsLink">Programs</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" id="attendanceLink">Attendance</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" id="logsLink">Activity Logs</a>
-                    </li>
-                </ul>
-                <div class="d-flex">
-                    <span class="navbar-text me-3" id="userGreeting"></span>
-                    <button class="btn btn-outline-light" id="logoutBtn">Logout</button>
+<body class="d-flex flex-column min-vh-100">
+    <!-- App Container -->
+    <div id="app" class="d-flex flex-column flex-grow-1">
+        <!-- Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="#">Student Management</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-page="dashboard">Dashboard</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-page="profile">My Profile</a>
+                        </li>
+                        <li class="nav-item admin-only">
+                            <a class="nav-link" href="#" data-page="students">Students</a>
+                        </li>
+                        <li class="nav-item admin-only">
+                            <a class="nav-link" href="#" data-page="programs">Programs</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-page="attendance">Attendance</a>
+                        </li>
+                        <li class="nav-item student-only">
+                            <a class="nav-link" href="#" data-page="announcements">Announcements</a>
+                        </li>
+                        <li class="nav-item admin-only">
+                            <a class="nav-link" href="#" data-page="logs">Activity Logs</a>
+                        </li>
+                    </ul>
+                    <div class="d-flex">
+                        <span class="navbar-text me-3" id="userGreeting"></span>
+                        <button class="btn btn-outline-light" id="logoutBtn">Logout</button>
+                    </div>
                 </div>
             </div>
-        </div>
-    </nav>
+        </nav>
 
-    <!-- Main Content -->
-    <div class="container mt-4" id="mainContent">
-        <!-- Content will be loaded here dynamically -->
-        <div class="text-center my-5">
-            <h2>Welcome to Student Management System</h2>
-            <p class="lead">Please log in to continue</p>
+        <!-- Main Content -->
+        <div class="container mt-4" id="mainContent">
+            <!-- Content will be loaded here dynamically -->
+            <div class="text-center my-5">
+                <h2>Welcome to Student Management System</h2>
+                <p class="lead">Please log in to continue</p>
+            </div>
         </div>
     </div>
 
@@ -58,29 +64,74 @@
     <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Login</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Login to Your Account</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="mb-4 text-center">
+                        <div class="btn-group auth-toggle" role="group">
+                            <input type="radio" class="btn-check" name="loginType" id="studentLogin" autocomplete="off" checked>
+                            <label class="btn" for="studentLogin">
+                                <i class="fas fa-user-graduate me-2"></i>Student
+                            </label>
+                            
+                            <input type="radio" class="btn-check" name="loginType" id="adminLogin" autocomplete="off">
+                            <label class="btn" for="adminLogin">
+                                <i class="fas fa-user-shield me-2"></i>Admin
+                            </label>
+                        </div>
+                    </div>
+                    
                     <form id="loginForm">
-                        <div class="mb-3">
-                            <label for="loginEmail" class="form-label">Email address</label>
-                            <input type="email" class="form-control" id="loginEmail" required>
+                        <!-- Student Login Fields -->
+                        <div id="studentLoginFields">
+                            <div class="mb-3">
+                                <label for="studentEmail" class="form-label">Student Email</label>
+                                <input type="email" class="form-control" id="studentEmail" required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="studentPassword" class="form-label">Password</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="studentPassword" required>
+                                    <button class="btn btn-outline-secondary toggle-password" type="button">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="loginPassword" class="form-label">Password</label>
-                            <input type="password" class="form-control" id="loginPassword" required>
+
+                        <!-- Admin Login Fields (initially hidden) -->
+                        <div id="adminLoginFields" style="display: none;">
+                            <div class="mb-3">
+                                <label for="adminEmail" class="form-label">Admin Email</label>
+                                <input type="email" class="form-control" id="adminEmail">
+                            </div>
+                            <div class="mb-4">
+                                <label for="adminPassword" class="form-label">Password</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="adminPassword">
+                                    <button class="btn btn-outline-secondary toggle-password" type="button">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
+
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="rememberMe">
                             <label class="form-check-label" for="rememberMe">Remember me</label>
                         </div>
-                        <button type="submit" class="btn btn-primary w-100">Login</button>
+                        
+                        <button type="submit" class="btn btn-primary w-100 py-2 mb-3">
+                            <i class="fas fa-sign-in-alt me-2"></i>Login
+                        </button>
+                        
+                        <div class="text-center mt-3">
+                            <span id="registerPrompt">Don't have an account? </span>
+                            <a href="#" id="showRegister" class="text-decoration-none">Register here</a>
+                        </div>
                     </form>
-                    <div class="text-center mt-3">
-                        <a href="#" id="showRegister">Don't have an account? Register</a>
-                    </div>
                 </div>
             </div>
         </div>
@@ -88,63 +139,228 @@
 
     <!-- Register Modal -->
     <div class="modal fade" id="registerModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Register</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Create an Account</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="registerForm">
+                    <div class="mb-4 text-center">
+                        <div class="btn-group auth-toggle" role="group">
+                            <input type="radio" class="btn-check" name="registerType" id="studentRegister" autocomplete="off" checked>
+                            <label class="btn" for="studentRegister">
+                                <i class="fas fa-user-graduate me-2"></i>Student
+                            </label>
+                            
+                            <input type="radio" class="btn-check" name="registerType" id="adminRegister" autocomplete="off">
+                            <label class="btn" for="adminRegister">
+                                <i class="fas fa-user-shield me-2"></i>Admin
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Student Registration Form -->
+                    <form id="studentRegisterForm">
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="firstName" class="form-label">First Name</label>
-                                <input type="text" class="form-control" id="firstName" required>
+                                <label for="studentFullName" class="form-label">Full Name</label>
+                                <input type="text" class="form-control" id="studentFullName" required>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="lastName" class="form-label">Last Name</label>
-                                <input type="text" class="form-control" id="lastName" required>
+                                <label for="studentId" class="form-label">Student ID</label>
+                                <input type="text" class="form-control" id="studentId" required>
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="registerEmail" class="form-label">Email address</label>
-                            <input type="email" class="form-control" id="registerEmail" required>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="academicLevel" class="form-label">Academic Level</label>
+                                <select class="form-select" id="academicLevel" required>
+                                    <option value="">Select Level</option>
+                                    <option value="Foundation">Foundation</option>
+                                    <option value="Diploma">Diploma</option>
+                                    <option value="Degree">Degree</option>
+                                    <option value="A-levels">A-levels</option>
+                                    <option value="Masters">Masters</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="studentRegEmail" class="form-label">Student Email</label>
+                                <input type="email" class="form-control" id="studentRegEmail" required>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="registerPassword" class="form-label">Password</label>
-                            <input type="password" class="form-control" id="registerPassword" required>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="studentPhone" class="form-label">Phone Number</label>
+                                <input type="tel" class="form-control" id="studentPhone" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="courseName" class="form-label">Course Name</label>
+                                <input type="text" class="form-control" id="courseName" required>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="confirmPassword" class="form-label">Confirm Password</label>
-                            <input type="password" class="form-control" id="confirmPassword" required>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="studentIC" class="form-label">IC Number</label>
+                                <input type="text" class="form-control" id="studentIC" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="studentRegPassword" class="form-label">Password</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="studentRegPassword" required>
+                                    <button class="btn btn-outline-secondary toggle-password" type="button">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="userType" class="form-label">Register as</label>
-                            <select class="form-select" id="userType" required>
-                                <option value="student">Student</option>
-                                <option value="admin">Administrator</option>
-                            </select>
+                        <div class="mb-4">
+                            <label for="confirmStudentPassword" class="form-label">Confirm Password</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="confirmStudentPassword" required>
+                                <button class="btn btn-outline-secondary toggle-password" type="button">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
                         </div>
-                        <button type="submit" class="btn btn-primary w-100">Register</button>
+                        <button type="submit" class="btn btn-primary w-100 py-2 mb-3">
+                            <i class="fas fa-user-plus me-2"></i>Register as Student
+                        </button>
                     </form>
+
+                    <!-- Admin Registration Form (initially hidden) -->
+                    <form id="adminRegisterForm" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="adminFullName" class="form-label">Full Name</label>
+                                <input type="text" class="form-control" id="adminFullName" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="adminRegEmail" class="form-label">Email Address</label>
+                                <input type="email" class="form-control" id="adminRegEmail" required>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="adminId" class="form-label">Admin ID</label>
+                                <input type="text" class="form-control" id="adminId" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="adminPhone" class="form-label">Phone Number</label>
+                                <input type="tel" class="form-control" id="adminPhone" required>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="adminIC" class="form-label">IC Number</label>
+                                <input type="text" class="form-control" id="adminIC" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="adminRegPassword" class="form-label">Password</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="adminRegPassword" required>
+                                    <button class="btn btn-outline-secondary toggle-password" type="button">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">Minimum 8 characters</small>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label for="confirmAdminPassword" class="form-label">Confirm Password</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="confirmAdminPassword" required>
+                                <button class="btn btn-outline-secondary toggle-password" type="button">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 py-2 mb-3">
+                            <i class="fas fa-user-shield me-2"></i>Register as Admin
+                        </button>
+                    </form>
+
                     <div class="text-center mt-3">
-                        <a href="#" id="showLogin">Already have an account? Login</a>
+                        <span>Already have an account? </span>
+                        <a href="#" id="showLogin" class="text-decoration-none">Login here</a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Bootstrap JS Bundle with Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- jQuery -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <!-- Custom JS -->
-    <script src="js/main.js"></script>
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Firebase init (CDN ESM) -->
+    <script type="module" src="js/firebase-init.js"></script>
+
+    <!-- Custom JavaScript -->
     <script src="js/auth.js"></script>
-    <script src="js/students.js"></script>
-    <script src="js/programs.js"></script>
-    <script src="js/attendance.js"></script>
-    <script src="js/logs.js"></script>
+    
+    <!-- Page Modules -->
+    <script src="js/pages/profile.js"></script>
+    <script src="js/pages/attendance.js"></script>
+    <script src="js/pages/students.js"></script>
+    <script src="js/pages/programs.js"></script>
+    <script src="js/pages/activity-logs.js"></script>
+    <script src="js/pages/announcements.js"></script>
+    
+    <!-- Core Application -->
+    <script src="js/components/navigation.js"></script>
+    <script src="js/app.js"></script>
+    
+    <script>
+        // Initialize the application when the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize the application
+            App.init();
+            
+            // Toggle between login and register modals
+            const showRegister = document.getElementById('showRegister');
+            const showLogin = document.getElementById('showLogin');
+            
+            if (showRegister && showLogin) {
+                showRegister.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+                    const registerModal = new bootstrap.Modal(document.getElementById('registerModal'));
+                    
+                    // Blur any focused element before hiding to prevent aria-hidden focus issues
+                    if (document.activeElement && document.activeElement.blur) {
+                        document.activeElement.blur();
+                    }
+                    if (loginModal) loginModal.hide();
+                    registerModal.show();
+                    // Move focus into the new modal
+                    setTimeout(() => {
+                        document.getElementById('studentFullName')?.focus();
+                    }, 0);
+                });
+                
+                showLogin.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const registerModal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
+                    const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                    
+                    // Blur any focused element before hiding to prevent aria-hidden focus issues
+                    if (document.activeElement && document.activeElement.blur) {
+                        document.activeElement.blur();
+                    }
+                    if (registerModal) registerModal.hide();
+                    loginModal.show();
+                    // Move focus into the new modal
+                    setTimeout(() => {
+                        const isStudentLogin = document.getElementById('studentLogin')?.checked;
+                        if (isStudentLogin) {
+                            document.getElementById('studentEmail')?.focus();
+                        } else {
+                            document.getElementById('adminEmail')?.focus();
+                        }
+                    }, 0);
+                });
+            }
+        });
+    </script>
 </body>
 </html>
