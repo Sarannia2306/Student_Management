@@ -3,7 +3,7 @@ const App = (function() {
     // Private variables
     let currentUser = null;
     
-    // Mock data - In a real app, this would come from a backend API
+    // Mock data
     const mockData = {
         students: JSON.parse(localStorage.getItem('students')) || [],
         programs: JSON.parse(localStorage.getItem('programs')) || [
@@ -1405,8 +1405,6 @@ const App = (function() {
             action,
             user,
             timestamp: new Date().toISOString(),
-            // In a real app, you might want to capture IP address from the server
-            ip: '127.0.0.1' // Mock IP address
         });
         
         // Keep only the last 1000 logs to prevent localStorage from getting too large

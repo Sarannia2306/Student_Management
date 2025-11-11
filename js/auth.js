@@ -5,28 +5,74 @@ const Auth = (function() {
         return localStorage.getItem('currentUser') !== null;
     }
 
-    // Toggle password visibility
+    // Toggle password visibility within auth modals only (scoped listeners)
     function togglePasswordVisibility() {
-        document.addEventListener('click', function(e) {
-            if (e.target.closest('.toggle-password')) {
-                const button = e.target.closest('.toggle-password');
-                const input = button.previousElementSibling;
-                const icon = button.querySelector('i');
-                
-                if (input.type === 'password') {
+        const bindInContainer = (container) => {
+            if (!container || container._boundToggleDelegation) return;
+            container._boundToggleDelegation = true;
+            container.addEventListener('click', function(e){
+                const btn = e.target.closest('.toggle-password');
+                if (!btn || !container.contains(btn)) return;
+                const group = btn.closest('.input-group');
+                const input = group ? group.querySelector('input') : btn.previousElementSibling;
+                const icon = btn.querySelector('i');
+                try { console.log('[Auth-scope] click', { id: input?.id, type: input?.type }); } catch(_){}
+                if (!input) return;
+                if (String(input.type).toLowerCase() === 'password') {
                     input.type = 'text';
-                    icon.classList.remove('fa-eye');
-                    icon.classList.add('fa-eye-slash');
+                    if (icon) { icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
                 } else {
                     input.type = 'password';
-                    icon.classList.remove('fa-eye-slash');
-                    icon.classList.add('fa-eye');
+                    if (icon) { icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
                 }
-            }
-        });
+            });
+        };
+        bindInContainer(document.getElementById('loginModal'));
+        bindInContainer(document.getElementById('registerModal'));
     }
 
+
     function isValidEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v||'');}
+    // >=8 chars, at least 1 uppercase, 1 number, 1 special character
+    function isStrongPassword(p){
+        const s = String(p||'');
+        return /[A-Z]/.test(s) && /\d/.test(s) && /[^A-Za-z0-9]/.test(s) && s.length >= 8;
+    }
+
+    // Mask IC leaving first 2 and last 2 digits visible
+    function maskIC(ic){
+        const s = String(ic||'');
+        if (s.length <= 4) return '*'.repeat(Math.max(0, s.length));
+        const head = s.slice(0,2), tail = s.slice(-2);
+        return head + '*'.repeat(s.length - 4) + tail;
+    }
+
+    function updatePwdHints(prefix, value){
+        const s = String(value||'');
+        const okLen = s.length >= 8;
+        const okUpper = /[A-Z]/.test(s);
+        const okNum = /\d/.test(s);
+        const okSpecial = /[^A-Za-z0-9]/.test(s);
+
+        const setState = (id, ok) => {
+            const li = document.getElementById(id);
+            if (!li) return;
+            const icon = li.querySelector('.hint-icon');
+            li.classList.toggle('text-success', ok);
+            li.classList.toggle('text-muted', !ok);
+            if (icon){
+                icon.classList.remove('fa-circle','fa-check-circle','text-success');
+                icon.classList.add(ok ? 'fa-check-circle' : 'fa-circle');
+                if (ok) icon.classList.add('text-success');
+                icon.style.fontSize = ok ? '12px' : '6px';
+            }
+        };
+
+        setState(`${prefix}PwdHintLen`, okLen);
+        setState(`${prefix}PwdHintUpper`, okUpper);
+        setState(`${prefix}PwdHintNum`, okNum);
+        setState(`${prefix}PwdHintSpecial`, okSpecial);
+    }
     function mapAuthError(err){
         const code = (err && err.code ? String(err.code) : '').toLowerCase();
         const msg = (err && err.message ? String(err.message) : '').toLowerCase();
@@ -40,6 +86,8 @@ const Auth = (function() {
         if (text.includes('too-many-requests')) return 'Too many attempts. Please try again later';
         if (text.includes('network-request-failed')) return 'Network error. Check your connection and try again';
         if (text.includes('operation-not-allowed')) return 'Email/Password sign-in is disabled in Firebase project';
+        if (text.includes('permission_denied') || text.includes('permission-denied')) return 'Database permission denied. Please check Firebase Realtime Database rules.';
+        if (text.includes('subtle') && text.includes('secure')) return 'Secure context required. Please use HTTPS or Firebase Hosting to continue.';
         return 'Authentication error. Please try again.';
     }
 
@@ -59,6 +107,13 @@ const Auth = (function() {
                 const user = await window.FirebaseAPI.signIn(email, password);
                 if (!user || (user.role && user.role !== 'student')) {
                     return showAlert('This account is not a Student', 'danger');
+                }
+                if (!(user.emailVerified || user.verified === true)) {
+                    localStorage.setItem('pendingVerification', JSON.stringify({ uid: user.uid, email: user.email, role: 'student' }));
+                    showAlert('Please verify your email via the link we sent to your inbox.', 'warning');
+                    try { await window.FirebaseAPI?.doSignOut?.(); } catch(_){}
+                    if (typeof App !== 'undefined') App.loadPage('verify');
+                    return;
                 }
                 const userData = { ...user, role: 'student', lastLogin: new Date().toISOString() };
                 localStorage.setItem('currentUser', JSON.stringify(userData));
@@ -102,6 +157,13 @@ const Auth = (function() {
                 if (!user || (user.role && user.role !== 'admin')) {
                     return showAlert('This account is not an Admin', 'danger');
                 }
+                if (!(user.emailVerified || user.verified === true)) {
+                    localStorage.setItem('pendingVerification', JSON.stringify({ uid: user.uid, email: user.email, role: 'admin' }));
+                    showAlert('Please verify your email via the link we sent to your inbox.', 'warning');
+                    try { await window.FirebaseAPI?.doSignOut?.(); } catch(_){}
+                    if (typeof App !== 'undefined') App.loadPage('verify');
+                    return;
+                }
                 const userData = { ...user, role: 'admin', lastLogin: new Date().toISOString() };
                 localStorage.setItem('currentUser', JSON.stringify(userData));
             } else {
@@ -129,6 +191,8 @@ const Auth = (function() {
     // Handle student registration
     async function handleStudentRegister(e) {
         e.preventDefault();
+        const agreed = !!document.getElementById('studentAgree')?.checked;
+        if (!agreed) { showAlert('Please agree to the Terms & Conditions to continue', 'danger'); document.getElementById('studentAgree')?.focus(); return; }
         
         const formData = {
             id: document.getElementById('studentId').value.trim(),
@@ -147,23 +211,46 @@ const Auth = (function() {
         if (!formData.fullName){ showAlert('Full name is required', 'danger'); document.getElementById('studentFullName').focus(); return; }
         if (!isValidEmail(formData.email)){ showAlert('Please enter a valid email', 'danger'); document.getElementById('studentRegEmail').focus(); return; }
         if (!formData.password){ showAlert('Password is required', 'danger'); document.getElementById('studentRegPassword').focus(); return; }
-        if (formData.password.length < 6){ showAlert('Password must be at least 6 characters long', 'danger'); document.getElementById('studentRegPassword').focus(); return; }
+        if (!isStrongPassword(formData.password)){
+            showAlert('Password must be at least 8 characters, include 1 uppercase, 1 number, and 1 special character', 'danger');
+            document.getElementById('studentRegPassword').focus();
+            return;
+        }
         if (formData.password !== formData.confirmPassword){ showAlert('Passwords do not match', 'danger'); document.getElementById('confirmStudentPassword').focus(); return; }
         try {
             if (window.FirebaseAPI?.registerUser) {
-                await window.FirebaseAPI.registerUser(formData.email, formData.password, 'student', {
+                // Hash IC (no pre-auth DB reads). We'll enforce uniqueness by index write after registration.
+                const icHash = await window.FirebaseAPI.sha256Hex(formData.icNumber);
+                const created = await window.FirebaseAPI.registerUser(formData.email, formData.password, 'student', {
                     id: formData.id,
                     fullName: formData.fullName,
                     academicLevel: formData.academicLevel,
                     phone: formData.phone,
                     course: formData.course,
-                    icNumber: formData.icNumber
+                    icHash: icHash,
+                    maskedIC: maskIC(formData.icNumber)
                 });
+                // Create IC uniqueness index (fails if duplicate); show clear error and sign out if it fails
+                try {
+                    await window.FirebaseAPI.setIcIndex(icHash, created.uid);
+                } catch (e) {
+                    showAlert('IC number already exists. Please use a different IC.', 'danger');
+                    try { await window.FirebaseAPI?.doSignOut?.(); } catch(_){}
+                    return;
+                }
+                // Email verification already sent by Firebase on registration
+                localStorage.setItem('pendingVerification', JSON.stringify({ uid: created.uid, email: formData.email, role: 'student' }));
+                // Close register modal and route to Verify page, do not show login modal
+                const regEl = document.getElementById('registerModal');
+                if (regEl) { try { (bootstrap.Modal.getInstance(regEl) || new bootstrap.Modal(regEl)).hide(); } catch(_){} }
+                if (typeof App !== 'undefined') App.loadPage('verify');
+                return;
             } else {
                 const students = JSON.parse(localStorage.getItem('students') || '[]');
                 if (students.some(s => s.email === formData.email)) return showAlert('Email already registered', 'danger');
                 if (students.some(s => s.id === formData.id)) return showAlert('Student ID already exists', 'danger');
                 const { confirmPassword, ...studentData } = formData;
+                studentData.maskedIC = maskIC(studentData.icNumber);
                 students.push(studentData);
                 localStorage.setItem('students', JSON.stringify(students));
             }
@@ -188,6 +275,8 @@ const Auth = (function() {
     // Handle admin registration (only for demo, in production this would be restricted)
     async function handleAdminRegister(e) {
         e.preventDefault();
+        const agreed = !!document.getElementById('adminAgree')?.checked;
+        if (!agreed) { showAlert('Please agree to the Terms & Conditions to continue', 'danger'); document.getElementById('adminAgree')?.focus(); return; }
         
         const formData = {
             id: document.getElementById('adminId').value.trim(),
@@ -204,21 +293,41 @@ const Auth = (function() {
         if (!formData.fullName){ showAlert('Full name is required', 'danger'); document.getElementById('adminFullName').focus(); return; }
         if (!isValidEmail(formData.email)){ showAlert('Please enter a valid email', 'danger'); document.getElementById('adminRegEmail').focus(); return; }
         if (!formData.password){ showAlert('Password is required', 'danger'); document.getElementById('adminRegPassword').focus(); return; }
-        if (formData.password.length < 8){ showAlert('Admin password must be at least 8 characters long', 'danger'); document.getElementById('adminRegPassword').focus(); return; }
+        if (!isStrongPassword(formData.password)){
+            showAlert('Password must be at least 8 characters, include 1 uppercase, 1 number, and 1 special character', 'danger');
+            document.getElementById('adminRegPassword').focus();
+            return;
+        }
         if (formData.password !== formData.confirmPassword){ showAlert('Passwords do not match', 'danger'); document.getElementById('confirmAdminPassword').focus(); return; }
         try {
             if (window.FirebaseAPI?.registerUser) {
-                await window.FirebaseAPI.registerUser(formData.email, formData.password, 'admin', {
+                const icHash = await window.FirebaseAPI.sha256Hex(formData.icNumber);
+                const created = await window.FirebaseAPI.registerUser(formData.email, formData.password, 'admin', {
                     id: formData.id,
                     fullName: formData.fullName,
                     phone: formData.phone,
-                    icNumber: formData.icNumber
+                    icHash: icHash,
+                    maskedIC: maskIC(formData.icNumber)
                 });
+                try {
+                    await window.FirebaseAPI.setIcIndex(icHash, created.uid);
+                } catch (e) {
+                    showAlert('IC number already exists. Please use a different IC.', 'danger');
+                    try { await window.FirebaseAPI?.doSignOut?.(); } catch(_){}
+                    return;
+                }
+                // Email verification already sent by Firebase on registration
+                localStorage.setItem('pendingVerification', JSON.stringify({ uid: created.uid, email: formData.email, role: 'admin' }));
+                const regEl = document.getElementById('registerModal');
+                if (regEl) { try { (bootstrap.Modal.getInstance(regEl) || new bootstrap.Modal(regEl)).hide(); } catch(_){} }
+                if (typeof App !== 'undefined') App.loadPage('verify');
+                return;
             } else {
                 const admins = JSON.parse(localStorage.getItem('admins') || '[]');
                 if (admins.some(a => a.email === formData.email)) return showAlert('Admin email already registered', 'danger');
                 if (admins.some(a => a.id === formData.id)) return showAlert('Admin ID already exists', 'danger');
                 const { confirmPassword, ...adminData } = formData;
+                adminData.maskedIC = maskIC(adminData.icNumber);
                 admins.push(adminData);
                 localStorage.setItem('admins', JSON.stringify(admins));
             }
@@ -253,12 +362,10 @@ const Auth = (function() {
     
     // Show alert message
     function showAlert(message, type = 'info') {
-        // Remove any existing alerts
+        // Remove any existing alerts to avoid stacking
         const existingAlert = document.querySelector('.alert');
-        if (existingAlert) {
-            existingAlert.remove();
-        }
-        
+        if (existingAlert) existingAlert.remove();
+
         // Create alert element
         const alertDiv = document.createElement('div');
         alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
@@ -267,15 +374,26 @@ const Auth = (function() {
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         `;
-        
-        // Add alert to the page
-        const container = document.querySelector('.container') || document.body;
-        container.insertBefore(alertDiv, container.firstChild);
-        
+
+        // Prefer placing inside an open modal so it's visible above the backdrop
+        const modalBody = document.querySelector('.modal.show .modal-body');
+        const modalContent = document.querySelector('.modal.show .modal-content');
+        const container = modalBody || modalContent || document.querySelector('.container') || document.body;
+
+        if (container.firstChild) {
+            container.insertBefore(alertDiv, container.firstChild);
+        } else {
+            container.appendChild(alertDiv);
+        }
+
         // Auto-dismiss after 5 seconds
         setTimeout(() => {
-            const alert = bootstrap.Alert.getOrCreateInstance(alertDiv);
-            if (alert) alert.close();
+            try {
+                const alert = bootstrap.Alert.getOrCreateInstance(alertDiv);
+                if (alert) alert.close(); else alertDiv.remove();
+            } catch (_) {
+                alertDiv.remove();
+            }
         }, 5000);
     }
     
@@ -284,13 +402,26 @@ const Auth = (function() {
         // Toggle between student and admin login
         document.querySelectorAll('input[name="loginType"]').forEach(radio => {
             radio.addEventListener('change', function() {
-                const isStudentLogin = this.id === 'studentLogin';
+                const isSelectingAdmin = this.id === 'adminLogin' && this.checked;
+                if (isSelectingAdmin) {
+                    // Prompt for admin access code before allowing switch
+                    const code = window.prompt('Enter Admin Access Code');
+                    if (code !== '115416') {
+                        // Revert to student tab and keep student fields visible
+                        const studentRadio = document.getElementById('studentLogin');
+                        if (studentRadio) studentRadio.checked = true;
+                        document.getElementById('studentLoginFields').style.display = 'block';
+                        document.getElementById('adminLoginFields').style.display = 'none';
+                        try { showAlert('Invalid Admin Access Code', 'danger'); } catch(_){}
+                        return;
+                    }
+                }
+                const isStudentLogin = document.getElementById('studentLogin').checked;
                 document.getElementById('studentLoginFields').style.display = isStudentLogin ? 'block' : 'none';
                 document.getElementById('adminLoginFields').style.display = isStudentLogin ? 'none' : 'block';
-                
                 // Update register prompt
-                document.getElementById('registerPrompt').textContent = isStudentLogin ? 
-                    "Don't have a student account? " : 
+                document.getElementById('registerPrompt').textContent = isStudentLogin ?
+                    "Don't have a student account? " :
                     "Don't have an admin account? ";
             });
         });
@@ -390,6 +521,18 @@ const Auth = (function() {
                 document.getElementById('rememberMe').checked = true;
                 document.getElementById('adminPassword').focus();
             }
+        }
+
+        // Live password indicators on registration fields
+        const studentPwd = document.getElementById('studentRegPassword');
+        if (studentPwd){
+            studentPwd.addEventListener('input', () => updatePwdHints('student', studentPwd.value));
+            updatePwdHints('student', studentPwd.value);
+        }
+        const adminPwd = document.getElementById('adminRegPassword');
+        if (adminPwd){
+            adminPwd.addEventListener('input', () => updatePwdHints('admin', adminPwd.value));
+            updatePwdHints('admin', adminPwd.value);
         }
     }
     

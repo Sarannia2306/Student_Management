@@ -47,15 +47,20 @@ const App = (function() {
         const isAdmin = currentUser && currentUser.role === 'admin';
         const isLoggedIn = !!currentUser;
         
-        // Show/hide nav items based on role
+        // Show/hide nav items based on auth + role
         navItems.forEach(item => {
             const isAdminItem = item.classList.contains('admin-only');
             const isStudentItem = item.classList.contains('student-only');
-            
+            if (!isLoggedIn) {
+                item.style.display = 'none';
+                return;
+            }
             if (isAdminItem) {
                 item.style.display = isAdmin ? 'block' : 'none';
             } else if (isStudentItem) {
                 item.style.display = isAdmin ? 'none' : 'block';
+            } else {
+                item.style.display = 'block';
             }
         });
 
@@ -70,6 +75,13 @@ const App = (function() {
         if (logoutBtn) logoutBtn.style.display = isLoggedIn ? 'inline-block' : 'none';
     }
 
+    // Log activity entries to localStorage
+    function logActivity(action, userEmail) {
+        const logs = JSON.parse(localStorage.getItem('activityLogs') || '[]');
+        logs.unshift({ action, user: userEmail || 'System', timestamp: new Date().toISOString() });
+        localStorage.setItem('activityLogs', JSON.stringify(logs));
+    }
+
     // Handle navigation
     function handleNavigation(e) {
         const navLink = e.target.closest('[data-page]');
@@ -80,6 +92,15 @@ const App = (function() {
         loadPage(page);
     }
 
+    // Highlight active navigation link
+    function updateActiveNav(page) {
+        try {
+            document.querySelectorAll('[data-page]').forEach(el => el.classList.remove('active'));
+            const active = document.querySelector(`[data-page="${page}"]`);
+            if (active) active.classList.add('active');
+        } catch (_) {}
+    }
+
     // Load dashboard based on user role
     function loadDashboard() {
         if (currentUser.role === 'admin') {
@@ -87,6 +108,34 @@ const App = (function() {
         } else {
             loadStudentDashboard();
         }
+    }
+
+    // Attendance helpers
+    function getStudentAttendance(studentId) {
+        const all = JSON.parse(localStorage.getItem('attendance') || '[]');
+        const list = Array.isArray(all) ? all.filter(r => String(r.studentId) === String(studentId)) : [];
+        // Sort by date desc
+        return list.sort((a,b) => new Date(b.date) - new Date(a.date));
+    }
+
+    function calculateAttendancePercentage(records) {
+        if (!Array.isArray(records) || records.length === 0) return 0;
+        const present = records.filter(r => String(r.status || '').toLowerCase() === 'present').length;
+        return Math.round((present / records.length) * 100);
+    }
+
+    function getTodaysAttendanceCount() {
+        const all = JSON.parse(localStorage.getItem('attendance') || '[]');
+        const today = new Date().toISOString().slice(0,10);
+        return (Array.isArray(all) ? all : []).filter(r => (r.date || '').slice(0,10) === today && String(r.status||'').toLowerCase() === 'present').length;
+    }
+
+    function formatDateTime(value) {
+        try { return new Date(value).toLocaleString(); } catch (_) { return value || ''; }
+    }
+
+    function formatDate(value) {
+        try { return new Date(value).toLocaleDateString(); } catch (_) { return value || ''; }
     }
 
     // Load admin dashboard
@@ -367,6 +416,13 @@ const App = (function() {
                 console.error('ProfilePage module not loaded');
             }
         },
+        verify: () => {
+            if (typeof VerifyPage !== 'undefined') {
+                VerifyPage.init();
+            } else {
+                console.error('VerifyPage module not loaded');
+            }
+        },
         announcements: () => {
             if (typeof AnnouncementsPage !== 'undefined') {
                 AnnouncementsPage.init();
@@ -410,9 +466,20 @@ const App = (function() {
 
     // Load a specific page
     async function loadPage(page) {
+        // Prevent stuck overlays before navigating
+        cleanupModals();
         try {
             // Update active nav first
             updateActiveNav(page);
+            // Role-based access guard for admin-only pages
+            const adminOnlyPages = ['students', 'programs', 'logs'];
+            const notAdmin = !currentUser || String(currentUser.role) !== 'admin';
+            if (adminOnlyPages.includes(page) && notAdmin) {
+                try { Auth?.showAlert?.('Access denied: Admins only', 'danger'); } catch (_) {}
+                // Redirect to dashboard instead
+                loadDashboard();
+                return;
+            }
             
             // Show loading state
             document.getElementById('mainContent').innerHTML = `
@@ -438,8 +505,9 @@ const App = (function() {
             // Show error message
             document.getElementById('mainContent').innerHTML = `
                 <div class="alert alert-danger">
-                    <h4>Error loading page</h4>
-                    <p>${error.message || 'An error occurred while loading the page.'}</p>
+                    <h4>Something went wrong</h4>
+                    <p>An unexpected error occurred while loading the page. Please try again.</p>
+                    <p class="mb-0"><small class="text-muted">If the problem persists, contact support.</small></p>
                     <button class="btn btn-primary" onclick="App.loadPage('dashboard')">
                         Return to Dashboard
                     </button>
@@ -448,27 +516,50 @@ const App = (function() {
         }
     }
 
-    // Update active navigation item
-    function updateActiveNav(activePage) {
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.classList.remove('active');
-            if (link.getAttribute('data-page') === activePage) {
-                link.classList.add('active');
-            }
-        });
+    // ... (rest of the code remains the same)
+
+    // Utility: ensure no stuck Bootstrap modal/backdrop blocks the UI
+    function cleanupModals() {
+        try {
+            // Hide any visible modals
+            document.querySelectorAll('.modal.show').forEach(m => {
+                try {
+                    const inst = bootstrap.Modal.getInstance(m) || new bootstrap.Modal(m);
+                    inst.hide();
+                } catch (_) {}
+            });
+        } catch (_) {}
+        // Remove body state and leftover backdrops
+        document.body.classList.remove('modal-open');
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
     }
 
+    // Global safety: whenever any modal hides, make sure backdrop/body are sane
+    document.addEventListener('hidden.bs.modal', function () {
+        setTimeout(() => {
+            if (!document.querySelector('.modal.show')) {
+                document.body.classList.remove('modal-open');
+                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+            }
+        }, 0);
+    });
+
     // Handle logout
-    function handleLogout() {
+    async function handleLogout() {
         // Log the logout activity
         if (currentUser) {
             logActivity(`User logged out`, currentUser.email);
         }
         
+        // Firebase sign out if available
+        try { await window.FirebaseAPI?.doSignOut?.(); } catch (_) {}
+
         // Clear current user
         localStorage.removeItem('currentUser');
         currentUser = null;
-        
+        // Clean up any stuck overlays before showing login
+        cleanupModals();
+
         // Redirect to login
         const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
         loginModal.show();
@@ -481,62 +572,12 @@ const App = (function() {
         `;
     }
 
-    // Helper functions
-    function formatDate(dateString) {
-        const options = { year: 'numeric', month: 'short', day: 'numeric' };
-        return new Date(dateString).toLocaleDateString(undefined, options);
-    }
-
-    function formatDateTime(dateString) {
-        const options = { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        };
-        return new Date(dateString).toLocaleDateString(undefined, options);
-    }
-
-    function getStudentAttendance(studentId) {
-        const attendance = JSON.parse(localStorage.getItem('attendance') || '[]');
-        return attendance.filter(record => record.studentId === studentId);
-    }
-
-    function calculateAttendancePercentage(attendanceRecords) {
-        if (!attendanceRecords.length) return 0;
-        const presentCount = attendanceRecords.filter(r => (r.status || '').toLowerCase() === 'present').length;
-        return Math.round((presentCount / attendanceRecords.length) * 100);
-    }
-
-    function getTodaysAttendanceCount() {
-        const today = new Date().toISOString().split('T')[0];
-        const attendance = JSON.parse(localStorage.getItem('attendance') || '[]');
-        return attendance.filter(record => {
-            const status = (record.status || '').toLowerCase();
-            return record.date.startsWith(today) && status === 'present';
-        }).length;
-    }
-
-    function logActivity(action, user = null) {
-        const logs = JSON.parse(localStorage.getItem('activityLogs') || '[]');
-        logs.unshift({
-            action,
-            user: user || (currentUser ? currentUser.email : 'System'),
-            timestamp: new Date().toISOString()
-        });
-        localStorage.setItem('activityLogs', JSON.stringify(logs));
-    }
-
-    // Initialize on DOM ready
-    document.addEventListener('DOMContentLoaded', init);
-
-    // Public API
     return {
         init,
         setCurrentUser,
         loadDashboard,
         loadPage,
-        logActivity
+        logActivity,
+        handleLogout
     };
 })();

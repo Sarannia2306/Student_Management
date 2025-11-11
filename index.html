@@ -45,7 +45,7 @@
                     <div class="d-flex">
                         <span class="navbar-text me-3" id="userGreeting"></span>
                         <button class="btn btn-outline-light me-2" id="loginBtn">Login</button>
-                        <button class="btn btn-outline-light" id="logoutBtn">Logout</button>
+                        <button class="btn btn-outline-light" id="logoutBtn" style="display:none;">Logout</button>
                     </div>
                 </div>
             </div>
@@ -57,6 +57,55 @@
             <div class="text-center my-5">
                 <h2>Welcome to Student Management System</h2>
                 <p class="lead">Please log in to continue</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terms & Conditions Modal -->
+    <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title" id="termsModalLabel">Terms and Conditions</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h6 class="mb-2">1. Purpose of the System</h6>
+                    <p>This Student Management System is developed for educational and administrative purposes within the institution. It allows students and administrators to manage academic records, attendance, and related information efficiently.</p>
+
+                    <h6 class="mb-2">2. User Responsibility</h6>
+                    <p>Users must provide accurate and complete information during registration. Each user is responsible for maintaining the confidentiality of their login credentials. Sharing or misusing another user’s credentials is strictly prohibited.</p>
+
+                    <h6 class="mb-2">3. Data Protection and Privacy</h6>
+                    <p>All personal and academic information is securely stored using Firebase Authentication and Database services, which provide encryption and secure HTTPS communication.</p>
+                    <p>This system adheres to the Personal Data Protection Act (PDPA) 2010 (Malaysia) and follows basic data protection principles.</p>
+                    <p>All collected data is used only for academic and administrative purposes and will not be shared, sold, or disclosed to any third parties without consent.</p>
+
+                    <h6 class="mb-2">4. Access Control</h6>
+                    <p>Access to this system is role-based. Students may view and update their own profile information. Administrators are authorized to manage student records, programs, attendance, and activity logs. Unauthorized access or attempts to bypass security measures are strictly prohibited and may result in access termination.</p>
+
+                    <h6 class="mb-2">5. Security Measures</h6>
+                    <ul>
+                        <li>Secure login and authentication using Firebase</li>
+                        <li>Email verification for user validation</li>
+                        <li>Role-based access control (Admin / Student)</li>
+                        <li>Input validation and data sanitization</li>
+                        <li>Activity logging to monitor important user actions</li>
+                    </ul>
+                    <p>Users are advised to log out after using the system, especially on shared or public devices.</p>
+
+                    <h6 class="mb-2">6. System Usage Policy</h6>
+                    <p>Users agree to use the system ethically and responsibly. Any misuse, unauthorized modification, or malicious activity (such as attempting to access admin pages without permission) is strictly prohibited.</p>
+
+                    <h6 class="mb-2">7. Disclaimer</h6>
+                    <p>This system is developed for educational purposes only. While all reasonable security measures have been implemented, the institution and developers are not liable for any data loss or misuse resulting from unauthorized access or external attacks.</p>
+
+                    <h6 class="mb-2">8. Acceptance of Terms</h6>
+                    <p>By registering or logging in, you acknowledge that you have read, understood, and agreed to abide by these Terms and Conditions, and consent to the collection and use of your information in accordance with this policy.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
             </div>
         </div>
     </div>
@@ -122,6 +171,11 @@
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="rememberMe">
                             <label class="form-check-label" for="rememberMe">Remember me</label>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">
+                                <a href="#" class="text-decoration-underline" data-bs-toggle="modal" data-bs-target="#termsModal">View Terms and Conditions</a>
+                            </small>
                         </div>
                         
                         <button type="submit" class="btn btn-primary w-100 py-2 mb-3">
@@ -213,6 +267,22 @@
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
+                                <div class="form-text">
+                                    <ul class="list-unstyled mb-0 small text-muted ps-3">
+                                        <li id="studentPwdHintLen" class="d-flex align-items-center">
+                                            <i class="fas fa-circle me-2 hint-icon" style="font-size:6px;"></i>Minimum 8 characters
+                                        </li>
+                                        <li id="studentPwdHintUpper" class="d-flex align-items-center">
+                                            <i class="fas fa-circle me-2 hint-icon" style="font-size:6px;"></i>Must include 1 uppercase
+                                        </li>
+                                        <li id="studentPwdHintNum" class="d-flex align-items-center">
+                                            <i class="fas fa-circle me-2 hint-icon" style="font-size:6px;"></i>Must include 1 number
+                                        </li>
+                                        <li id="studentPwdHintSpecial" class="d-flex align-items-center">
+                                            <i class="fas fa-circle me-2 hint-icon" style="font-size:6px;"></i>Must include 1 special character
+                                        </li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                         <div class="mb-4">
@@ -223,6 +293,10 @@
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="studentAgree">
+                            <label class="form-check-label" for="studentAgree">I agree to the <a href="#" class="text-decoration-underline" data-bs-toggle="modal" data-bs-target="#termsModal">Terms & Conditions</a></label>
                         </div>
                         <button type="submit" class="btn btn-primary w-100 py-2 mb-3">
                             <i class="fas fa-user-plus me-2"></i>Register as Student
@@ -264,7 +338,22 @@
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
-                                <small class="form-text text-muted">Minimum 8 characters</small>
+                                <div class="form-text">
+                                    <ul class="list-unstyled mb-0 small text-muted ps-3">
+                                        <li id="adminPwdHintLen" class="d-flex align-items-center">
+                                            <i class="fas fa-circle me-2 hint-icon" style="font-size:6px;"></i>Minimum 8 characters
+                                        </li>
+                                        <li id="adminPwdHintUpper" class="d-flex align-items-center">
+                                            <i class="fas fa-circle me-2 hint-icon" style="font-size:6px;"></i>Must include 1 uppercase
+                                        </li>
+                                        <li id="adminPwdHintNum" class="d-flex align-items-center">
+                                            <i class="fas fa-circle me-2 hint-icon" style="font-size:6px;"></i>Must include 1 number
+                                        </li>
+                                        <li id="adminPwdHintSpecial" class="d-flex align-items-center">
+                                            <i class="fas fa-circle me-2 hint-icon" style="font-size:6px;"></i>Must include 1 special character
+                                        </li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                         <div class="mb-4">
@@ -275,6 +364,10 @@
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="adminAgree">
+                            <label class="form-check-label" for="adminAgree">I agree to the <a href="#" class="text-decoration-underline" data-bs-toggle="modal" data-bs-target="#termsModal">Terms & Conditions</a></label>
                         </div>
                         <button type="submit" class="btn btn-primary w-100 py-2 mb-3">
                             <i class="fas fa-user-shield me-2"></i>Register as Admin
@@ -293,10 +386,10 @@
     <!-- Bootstrap JS and dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Firebase init (CDN ESM) -->
+    <!-- Firebase init -->
     <script type="module" src="js/firebase-init.js"></script>
 
-    <!-- Custom JavaScript -->
+    <!-- Auth JavaScript -->
     <script src="js/auth.js"></script>
     
     <!-- Page Modules -->
@@ -306,6 +399,7 @@
     <script src="js/pages/programs.js"></script>
     <script src="js/pages/activity-logs.js"></script>
     <script src="js/pages/announcements.js"></script>
+    <script src="js/pages/verify.js"></script>
     
     <!-- Core Application -->
     <script src="js/components/navigation.js"></script>

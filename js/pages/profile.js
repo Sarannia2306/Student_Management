@@ -1,10 +1,50 @@
 // Profile Page Module
 const ProfilePage = (function() {
+    function maskIC(ic){
+        const s = String(ic||'');
+        if (!s) return '';
+        if (s.length <= 4) return '*'.repeat(Math.max(0, s.length));
+        return s.slice(0,2) + '*'.repeat(s.length - 4) + s.slice(-2);
+    }
     // Initialize the profile page
     function init() {
         loadProfileData();
         setupEventListeners();
     }
+
+// Save admin profile data
+function saveAdminProfile(currentUser, formData) {
+    // Add admin-specific fields (position)
+    formData.position = document.getElementById('position')?.value || currentUser.position || 'Administrator';
+
+    const admins = JSON.parse(localStorage.getItem('admins') || '[]');
+    const adminIndex = admins.findIndex(a => a.id === currentUser.id);
+
+    if (adminIndex !== -1) {
+        admins[adminIndex] = { ...admins[adminIndex], ...formData };
+        localStorage.setItem('admins', JSON.stringify(admins));
+    }
+
+    // Update current user data regardless (handles Firebase case where list may not exist)
+    const updatedUser = { ...currentUser, ...formData };
+    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+
+    // Disable form fields after saving
+    const form = document.getElementById('profileForm');
+    const inputs = form.querySelectorAll('input:not([readonly]), select, textarea');
+    inputs.forEach(input => input.disabled = true);
+
+    // Toggle buttons visibility if present
+    const editBtn = document.getElementById('editProfileBtn');
+    const saveBtn = document.getElementById('saveProfileBtn');
+    const cancelBtn = document.getElementById('cancelEditBtn');
+    if (editBtn) editBtn.classList.remove('d-none');
+    if (saveBtn) saveBtn.classList.add('d-none');
+    if (cancelBtn) cancelBtn.classList.add('d-none');
+
+    showAlert('Profile updated successfully!', 'success');
+    App.logActivity('Updated admin profile', currentUser.email);
+}
 
     // Load profile data for the current user
     function loadProfileData() {
@@ -20,6 +60,7 @@ const ProfilePage = (function() {
 
     // Load student profile data
     function loadStudentProfile(student) {
+        const maskedIC = student.maskedIC || (student.icNumber ? maskIC(student.icNumber) : '');
         // Disable all form fields by default
         const formFields = `
             <div class="card">
@@ -33,11 +74,11 @@ const ProfilePage = (function() {
                             <div class="col-md-3 text-center">
                                 <div class="mb-3">
                                     <div class="position-relative d-inline-block">
-                                        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(student.fullName || 'Student')}&background=4e73df&color=fff&size=150" 
+                                        <img id="profileImg" src="${student.photoURL || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(student.fullName || 'Student') + '&background=4e73df&color=fff&size=150')}" 
                                              class="rounded-circle img-thumbnail" 
                                              alt="Profile Picture" 
                                              style="width: 150px; height: 150px; object-fit: cover;">
-                                        <button type="button" class="btn btn-sm btn-primary position-absolute bottom-0 end-0 rounded-circle" 
+                                        <button type="button" id="changePhotoBtn" class="btn btn-sm btn-primary position-absolute bottom-0 end-0 rounded-circle" 
                                                 style="width: 36px; height: 36px;"
                                                 data-bs-toggle="tooltip" 
                                                 data-bs-placement="bottom" 
@@ -49,6 +90,7 @@ const ProfilePage = (function() {
                                 <div class="text-muted">
                                     <small>PNG, JPG, or GIF (Max 2MB)</small>
                                 </div>
+                                <input type="file" id="profileFile" accept="image/*" class="d-none">
                             </div>
                             <div class="col-md-9">
                                 <div class="row">
@@ -74,7 +116,7 @@ const ProfilePage = (function() {
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label for="icNumber" class="form-label">IC Number</label>
-                                        <input type="text" class="form-control" id="icNumber" value="${student.icNumber || ''}">
+                                        <input type="text" class="form-control" id="icNumber" value="${maskedIC || 'Not provided'}" readonly>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label for="academicLevel" class="form-label">Academic Level</label>
@@ -174,6 +216,7 @@ const ProfilePage = (function() {
 
     // Load admin profile data
     function loadAdminProfile(admin) {
+        const maskedIC = admin.maskedIC || (admin.icNumber ? maskIC(admin.icNumber) : '');
         const profileHTML = `
             <div class="card">
                 <div class="card-header bg-primary text-white">
@@ -185,11 +228,11 @@ const ProfilePage = (function() {
                             <div class="col-md-3 text-center">
                                 <div class="mb-3">
                                     <div class="position-relative d-inline-block">
-                                        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(admin.fullName || 'Admin')}&background=4e73df&color=fff&size=150" 
+                                        <img id="profileImg" src="${admin.photoURL || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(admin.fullName || 'Admin') + '&background=4e73df&color=fff&size=150')}" 
                                              class="rounded-circle img-thumbnail" 
                                              alt="Profile Picture" 
                                              style="width: 150px; height: 150px; object-fit: cover;">
-                                        <button type="button" class="btn btn-sm btn-primary position-absolute bottom-0 end-0 rounded-circle" 
+                                        <button type="button" id="changePhotoBtn" class="btn btn-sm btn-primary position-absolute bottom-0 end-0 rounded-circle" 
                                                 style="width: 36px; height: 36px;"
                                                 data-bs-toggle="tooltip" 
                                                 data-bs-placement="bottom" 
@@ -201,6 +244,7 @@ const ProfilePage = (function() {
                                 <div class="text-muted">
                                     <small>PNG, JPG, or GIF (Max 2MB)</small>
                                 </div>
+                                <input type="file" id="profileFile" accept="image/*" class="d-none">
                             </div>
                             <div class="col-md-9">
                                 <div class="row">
@@ -226,7 +270,7 @@ const ProfilePage = (function() {
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label for="icNumber" class="form-label">IC Number</label>
-                                        <input type="text" class="form-control" id="icNumber" value="${admin.icNumber || ''}">
+                                        <input type="text" class="form-control" id="icNumber" value="${maskedIC || 'Not provided'}" readonly>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label for="position" class="form-label">Position</label>
@@ -317,17 +361,18 @@ const ProfilePage = (function() {
         document.addEventListener('click', function(e) {
             if (e.target.closest('.toggle-password')) {
                 const button = e.target.closest('.toggle-password');
-                const input = button.previousElementSibling;
+                // Only handle toggles within the profile form to avoid double-toggling with auth modals
+                if (!button.closest('#profileForm')) return;
+                const group = button.closest('.input-group');
+                const input = group ? group.querySelector('input') : button.previousElementSibling;
                 const icon = button.querySelector('i');
-                
-                if (input.type === 'password') {
+                if (!input) return;
+                if (String(input.type).toLowerCase() === 'password') {
                     input.type = 'text';
-                    icon.classList.remove('fa-eye');
-                    icon.classList.add('fa-eye-slash');
+                    if (icon) { icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
                 } else {
                     input.type = 'password';
-                    icon.classList.remove('fa-eye-slash');
-                    icon.classList.add('fa-eye');
+                    if (icon) { icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
                 }
             }
             
@@ -364,6 +409,99 @@ const ProfilePage = (function() {
                 saveProfile();
             }
         });
+
+        // Handle profile form submit (save changes + password logic)
+        document.addEventListener('submit', function(e){
+            const form = e.target;
+            if (form && form.id === 'profileForm') {
+                e.preventDefault();
+                saveProfile();
+            }
+        });
+
+        // Trigger file picker when clicking the camera button
+        document.addEventListener('click', function(e){
+            const btn = e.target.closest('#changePhotoBtn');
+            if (btn) {
+                e.preventDefault();
+                document.getElementById('profileFile')?.click();
+            }
+        });
+
+        // Handle file selection
+        document.addEventListener('change', async function(e){
+            if (e.target && e.target.id === 'profileFile') {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                // Validate type and size (<= 2MB)
+                const allowed = ['image/jpeg','image/png','image/gif','image/webp'];
+                if (!allowed.includes(file.type)) {
+                    showAlert('Please select a valid image (JPG, PNG, GIF, or WebP).', 'warning');
+                    e.target.value = '';
+                    return;
+                }
+                if (file.size > 2 * 1024 * 1024) {
+                    showAlert('Image is too large. Max size is 2MB.', 'warning');
+                    e.target.value = '';
+                    return;
+                }
+
+                // Optimistic preview
+                try {
+                    const imgEl = document.getElementById('profileImg');
+                    if (imgEl) {
+                        const blobUrl = URL.createObjectURL(file);
+                        imgEl.src = blobUrl;
+                    }
+                } catch(_) {}
+
+                // Create compressed data URL and persist (no Firebase Storage)
+                try {
+                    const cu = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                    const dataUrl = await (async function(file){
+                        const img = document.createElement('img');
+                        const reader = new FileReader();
+                        const loadFile = new Promise((resolve, reject) => {
+                            reader.onload = () => { img.src = reader.result; resolve(); };
+                            reader.onerror = reject; reader.readAsDataURL(file);
+                        });
+                        await loadFile;
+                        await new Promise(res => img.onload = res);
+                        const maxSize = 256; // px
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const ratio = Math.min(1, maxSize / Math.max(img.width, img.height));
+                        const w = Math.max(1, Math.round(img.width * ratio));
+                        const h = Math.max(1, Math.round(img.height * ratio));
+                        canvas.width = w; canvas.height = h;
+                        ctx.drawImage(img, 0, 0, w, h);
+                        return canvas.toDataURL('image/jpeg', 0.8);
+                    })(file);
+
+                    // Update user profile photoURL in RTDB by merging
+                    try {
+                        const uid = cu?.uid;
+                        if (uid && window.FirebaseAPI?.getUserProfile && window.FirebaseAPI?.setUserProfile) {
+                            const existing = await window.FirebaseAPI.getUserProfile(uid);
+                            const merged = existing ? { ...existing, photoURL: dataUrl } : { photoURL: dataUrl };
+                            await window.FirebaseAPI.setUserProfile(uid, merged);
+                        }
+                    } catch(_) {}
+
+                    // Update local currentUser and image src
+                    const updatedUser = { ...cu, photoURL: dataUrl };
+                    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+                    const imgEl2 = document.getElementById('profileImg');
+                    if (imgEl2) imgEl2.src = dataUrl;
+                    showAlert('Profile photo updated successfully!', 'success');
+                } catch(err) {
+                    console.error('Photo update error:', err);
+                    showAlert('Unable to update photo right now. Please try again later.', 'danger');
+                } finally {
+                    e.target.value = '';
+                }
+            }
+        });
     }
     
     // Save profile changes
@@ -377,7 +515,6 @@ const ProfilePage = (function() {
                 fullName: document.getElementById('fullName')?.value || '',
                 email: document.getElementById('email')?.value || '',
                 phone: document.getElementById('phone')?.value || '',
-                icNumber: document.getElementById('icNumber')?.value || '',
                 updatedAt: new Date().toISOString()
             };
             
@@ -451,6 +588,10 @@ function handlePasswordChange(currentUser, isAdmin) {
     const currentPassword = document.getElementById('currentPassword')?.value;
     
     if (newPassword && confirmNewPassword && currentPassword) {
+        // Reject if new password is same as current password
+        if (newPassword === currentPassword) {
+            throw new Error('New password must be different from current password');
+        }
         if (newPassword === confirmNewPassword) {
             // In a real app, you would verify the current password first
             // For this demo, we'll just update it
