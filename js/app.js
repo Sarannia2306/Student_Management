@@ -14,12 +14,20 @@ const App = (function() {
             // Show login modal if not logged in
             const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
             loginModal.show();
+            updateUIForUser();
         }
 
         // Add event listeners
         document.addEventListener('click', handleNavigation);
         
-        // Initialize logout button if it exists
+        // Initialize auth buttons if they exist
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+                const modal = new bootstrap.Modal(document.getElementById('loginModal'));
+                modal.show();
+            });
+        }
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', handleLogout);
@@ -37,6 +45,7 @@ const App = (function() {
     function updateUIForUser() {
         const navItems = document.querySelectorAll('.nav-item');
         const isAdmin = currentUser && currentUser.role === 'admin';
+        const isLoggedIn = !!currentUser;
         
         // Show/hide nav items based on role
         navItems.forEach(item => {
@@ -51,10 +60,14 @@ const App = (function() {
         });
 
         // Update user info in navbar
-        const userInfo = document.getElementById('userInfo');
-        if (userInfo) {
-            userInfo.textContent = currentUser.name || currentUser.email;
+        const userGreeting = document.getElementById('userGreeting');
+        const loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (userGreeting) {
+            userGreeting.textContent = isLoggedIn ? (currentUser.fullName || currentUser.name || currentUser.email) : '';
         }
+        if (loginBtn) loginBtn.style.display = isLoggedIn ? 'none' : 'inline-block';
+        if (logoutBtn) logoutBtn.style.display = isLoggedIn ? 'inline-block' : 'none';
     }
 
     // Handle navigation
@@ -457,7 +470,15 @@ const App = (function() {
         currentUser = null;
         
         // Redirect to login
-        window.location.href = 'index.html';
+        const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+        loginModal.show();
+        updateUIForUser();
+        document.getElementById('mainContent').innerHTML = `
+            <div class="text-center my-5">
+                <h2>Welcome to Student Management System</h2>
+                <p class="lead">Please log in to continue</p>
+            </div>
+        `;
     }
 
     // Helper functions
