@@ -14,36 +14,71 @@ const ProfilePage = (function() {
 
 // Save admin profile data
 function saveAdminProfile(currentUser, formData) {
+    console.log('saveAdminProfile called with:', currentUser, formData);
     // Add admin-specific fields (position)
     formData.position = document.getElementById('position')?.value || currentUser.position || 'Administrator';
 
-    const admins = JSON.parse(localStorage.getItem('admins') || '[]');
-    const adminIndex = admins.findIndex(a => a.id === currentUser.id);
+    // Check if user is from Firebase (has uid) or localStorage
+    if (currentUser.uid) {
+        // Firebase user - update in Firebase Realtime Database
+        console.log('Updating Firebase admin profile...');
+        
+        // Ensure required fields for Firebase rules are included
+        const updateData = {
+            ...formData,
+            email: currentUser.email, // Required by validation rules
+            role: currentUser.role,   // Required by validation rules
+            uid: currentUser.uid     // Include uid for reference
+        };
+        
+        // Use FirebaseAPI.updateUserProfile which preserves existing fields
+        window.FirebaseAPI?.updateUserProfile(currentUser.uid, updateData)
+            .then(() => {
+                console.log('Firebase admin profile updated successfully');
+                
+                // Update current user data in localStorage
+                const updatedUser = { ...currentUser, ...formData };
+                localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+                console.log('Current admin user updated in localStorage');
+                
+                // Form fields remain enabled after saving
+                const form = document.getElementById('profileForm');
+                const inputs = form.querySelectorAll('input:not([readonly]), select, textarea');
+                // Keep inputs enabled for continuous editing
+                
+                // No button toggling needed - Save Changes is always visible
+                
+                showAlert('Profile updated successfully!', 'success');
+                App.logActivity('Updated admin profile', currentUser.email);
+            })
+            .catch((error) => {
+                console.error('Error updating Firebase admin profile:', error);
+                showAlert('Error updating profile: ' + error.message, 'danger');
+            });
+    } else {
+        // LocalStorage user - update in localStorage
+        const admins = JSON.parse(localStorage.getItem('admins') || '[]');
+        const adminIndex = admins.findIndex(a => a.id === currentUser.id);
 
-    if (adminIndex !== -1) {
-        admins[adminIndex] = { ...admins[adminIndex], ...formData };
-        localStorage.setItem('admins', JSON.stringify(admins));
+        if (adminIndex !== -1) {
+            admins[adminIndex] = { ...admins[adminIndex], ...formData };
+            localStorage.setItem('admins', JSON.stringify(admins));
+        }
+
+        // Update current user data regardless (handles Firebase case where list may not exist)
+        const updatedUser = { ...currentUser, ...formData };
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+
+        // Form fields remain enabled after saving
+        const form = document.getElementById('profileForm');
+        const inputs = form.querySelectorAll('input:not([readonly]), select, textarea');
+        // Keep inputs enabled for continuous editing
+
+        // No button toggling needed - Save Changes is always visible
+
+        showAlert('Profile updated successfully!', 'success');
+        App.logActivity('Updated admin profile', currentUser.email);
     }
-
-    // Update current user data regardless (handles Firebase case where list may not exist)
-    const updatedUser = { ...currentUser, ...formData };
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-
-    // Disable form fields after saving
-    const form = document.getElementById('profileForm');
-    const inputs = form.querySelectorAll('input:not([readonly]), select, textarea');
-    inputs.forEach(input => input.disabled = true);
-
-    // Toggle buttons visibility if present
-    const editBtn = document.getElementById('editProfileBtn');
-    const saveBtn = document.getElementById('saveProfileBtn');
-    const cancelBtn = document.getElementById('cancelEditBtn');
-    if (editBtn) editBtn.classList.remove('d-none');
-    if (saveBtn) saveBtn.classList.add('d-none');
-    if (cancelBtn) cancelBtn.classList.add('d-none');
-
-    showAlert('Profile updated successfully!', 'success');
-    App.logActivity('Updated admin profile', currentUser.email);
 }
 
     // Load profile data for the current user
@@ -178,13 +213,10 @@ function saveAdminProfile(currentUser, formData) {
                         </div>
                         
                         <div class="d-flex justify-content-between">
-                            <button type="button" class="btn btn-outline-secondary" onclick="window.history.back()">
+                            <button type="button" class="btn btn-outline-secondary" onclick="App.loadPage('dashboard')">
                                 <i class="fas fa-arrow-left me-1"></i> Back
                             </button>
                             <div>
-                                <button type="reset" class="btn btn-outline-secondary me-2">
-                                    <i class="fas fa-undo me-1"></i> Reset
-                                </button>
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fas fa-save me-1"></i> Save Changes
                                 </button>
@@ -319,13 +351,10 @@ function saveAdminProfile(currentUser, formData) {
                         </div>
                         
                         <div class="d-flex justify-content-between">
-                            <button type="button" class="btn btn-outline-secondary" onclick="window.history.back()">
+                            <button type="button" class="btn btn-outline-secondary" onclick="App.loadPage('dashboard')">
                                 <i class="fas fa-arrow-left me-1"></i> Back
                             </button>
                             <div>
-                                <button type="reset" class="btn btn-outline-secondary me-2">
-                                    <i class="fas fa-undo me-1"></i> Reset
-                                </button>
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fas fa-save me-1"></i> Save Changes
                                 </button>
@@ -413,8 +442,10 @@ function saveAdminProfile(currentUser, formData) {
         // Handle profile form submit (save changes + password logic)
         document.addEventListener('submit', function(e){
             const form = e.target;
+            console.log('Form submitted:', form?.id);
             if (form && form.id === 'profileForm') {
                 e.preventDefault();
+                console.log('Calling saveProfile');
                 saveProfile();
             }
         });
@@ -506,7 +537,9 @@ function saveAdminProfile(currentUser, formData) {
     
     // Save profile changes
     function saveProfile() {
+        console.log('saveProfile function called');
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        console.log('Current user:', currentUser);
         const isAdmin = currentUser.role === 'admin';
         
         try {
@@ -547,37 +580,75 @@ function saveAdminProfile(currentUser, formData) {
 
 // Save student profile data
 function saveStudentProfile(currentUser, formData) {
+    console.log('saveStudentProfile called with:', currentUser, formData);
     // Add student-specific fields
     formData.academicLevel = document.getElementById('academicLevel')?.value || '';
     formData.address = document.getElementById('address')?.value || '';
     
-    // Update student data in localStorage
-    const students = JSON.parse(localStorage.getItem('students') || '[]');
-    const studentIndex = students.findIndex(s => s.id === currentUser.id);
-    
-    if (studentIndex !== -1) {
-        students[studentIndex] = { ...students[studentIndex], ...formData };
-        localStorage.setItem('students', JSON.stringify(students));
+    // Check if user is from Firebase (has uid) or localStorage
+    if (currentUser.uid) {
+        // Firebase user - update in Firebase Realtime Database
+        console.log('Updating Firebase user profile...');
         
-        // Update current user data
-        const updatedUser = { ...currentUser, ...formData };
-        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        // Ensure required fields for Firebase rules are included
+        const updateData = {
+            ...formData,
+            email: currentUser.email, // Required by validation rules
+            role: currentUser.role,   // Required by validation rules
+            uid: currentUser.uid     // Include uid for reference
+        };
         
-        // Disable form fields after saving
-        const form = document.getElementById('profileForm');
-        const inputs = form.querySelectorAll('input:not([readonly]), select, textarea');
-        inputs.forEach(input => input.disabled = true);
+        // Use FirebaseAPI.updateUserProfile which preserves existing fields
+        window.FirebaseAPI?.updateUserProfile(currentUser.uid, updateData)
+            .then(() => {
+                console.log('Firebase profile updated successfully');
+                
+                // Update current user data in localStorage
+                const updatedUser = { ...currentUser, ...formData };
+                localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+                console.log('Current user updated in localStorage');
+                
+                // Show success message
+                console.log('About to show success message');
+                showAlert('Profile updated successfully!', 'success');
+                
+                // Log the activity
+                App.logActivity('Updated student profile', currentUser.email);
+            })
+            .catch((error) => {
+                console.error('Error updating Firebase profile:', error);
+                showAlert('Error updating profile: ' + error.message, 'danger');
+            });
+    } else {
+        // LocalStorage user - update in localStorage
+        console.log('Updating localStorage user profile...');
+        const students = JSON.parse(localStorage.getItem('students') || '[]');
+        console.log('Students array:', students);
+        console.log('Looking for student with id:', currentUser.id);
+        const studentIndex = students.findIndex(s => s.id === currentUser.id);
+        console.log('Student index found:', studentIndex);
         
-        // Show edit button and hide save/cancel buttons
-        document.getElementById('editProfileBtn').classList.remove('d-none');
-        document.getElementById('saveProfileBtn').classList.add('d-none');
-        document.getElementById('cancelEditBtn').classList.add('d-none');
-        
-        // Show success message
-        showAlert('Profile updated successfully!', 'success');
-        
-        // Log the activity
-        App.logActivity('Updated student profile', currentUser.email);
+        if (studentIndex !== -1) {
+            console.log('Student found, updating data...');
+            students[studentIndex] = { ...students[studentIndex], ...formData };
+            localStorage.setItem('students', JSON.stringify(students));
+            console.log('Students array updated');
+            
+            // Update current user data
+            const updatedUser = { ...currentUser, ...formData };
+            localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+            console.log('Current user updated');
+            
+            // Show success message
+            console.log('About to show success message');
+            showAlert('Profile updated successfully!', 'success');
+            
+            // Log the activity
+            App.logActivity('Updated student profile', currentUser.email);
+        } else {
+            console.log('Student not found in students array');
+            showAlert('Student profile not found', 'danger');
+        }
     }
 }
 
@@ -634,6 +705,7 @@ function handlePasswordChange(currentUser, isAdmin) {
 
 // Show alert message
 function showAlert(message, type = 'info') {
+    console.log('showAlert called:', message, type);
     // Remove any existing alerts
     const existingAlert = document.querySelector('.alert');
     if (existingAlert) {
@@ -674,6 +746,7 @@ function showAlert(message, type = 'info') {
     
     // Public API
     return {
-        init
+        init,
+        saveProfile
     };
 })();

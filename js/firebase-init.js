@@ -14,9 +14,9 @@ async function sendVerificationEmailNow() {
 // Firebase initialization
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js';
 import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-analytics.js';
-import { getAuth, setPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification, reload, updateProfile } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js';
+import { getAuth, setPersistence, indexedDBLocalPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, reload, updateProfile } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-storage.js';
-import { getDatabase, ref, get, set } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js';
+import { getDatabase, ref, get, set, update } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBhTBfIGw87CVtyHd8LputmcHkCbhj8KFw",
@@ -43,6 +43,48 @@ async function getUserProfile(uid) {
 
 async function setUserProfile(uid, data) {
   await set(ref(db, `users/${uid}`), data);
+}
+
+async function updateUserProfile(uid, data) {
+  await update(ref(db, `users/${uid}`), data);
+}
+
+// List all students (role === 'student')
+async function listStudents() {
+  const snap = await get(ref(db, 'users'));
+  const out = [];
+  if (snap.exists()) {
+    snap.forEach(child => {
+      const v = child.val();
+      if (v && v.role === 'student') {
+        out.push({ ...v, uid: child.key });
+      }
+    });
+  }
+  return out;
+}
+
+// Programs helpers
+async function listPrograms() {
+  const snap = await get(ref(db, 'programs'));
+  const out = [];
+  if (snap.exists()) {
+    snap.forEach(child => {
+      const v = child.val();
+      if (v) out.push({ ...v, id: child.key });
+    });
+  }
+  return out;
+}
+
+async function saveProgramRecord(id, data) {
+  if (!id) throw new Error('Program id is required');
+  await update(ref(db, `programs/${id}`), data);
+}
+
+async function deleteProgramRecord(id) {
+  if (!id) throw new Error('Program id is required');
+  await set(ref(db, `programs/${id}`), null);
 }
 
 // Hash a string with SHA-256 and return hex
@@ -86,6 +128,11 @@ async function signIn(email, password) {
 
 async function doSignOut() { await signOut(auth); }
 
+async function sendPasswordReset(email) {
+  if (!email) throw new Error('Email is required');
+  await sendPasswordResetEmail(auth, email);
+}
+
 // Upload profile photo to Firebase Storage and return download URL
 async function uploadProfilePhoto(file) {
   if (!auth.currentUser) throw new Error('No authenticated user');
@@ -127,10 +174,13 @@ async function verifyOtp({ uid, code }) {
 
 window.FirebaseAPI = {
   app, auth, db,
-  signIn, registerUser, doSignOut, getUserProfile, setUserProfile, onAuthStateChanged,
+  signIn, registerUser, doSignOut, getUserProfile, setUserProfile, updateUserProfile,
+  listStudents, listPrograms, saveProgramRecord, deleteProgramRecord,
+  onAuthStateChanged,
   sendOtp, verifyOtp,
   sendVerificationEmailNow,
   reloadCurrentUser,
   sha256Hex, icExists, setIcIndex,
   uploadProfilePhoto, updateAuthPhotoURL,
+  sendPasswordReset,
 };
