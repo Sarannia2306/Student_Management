@@ -365,13 +365,14 @@ const App = (function() {
                     </div>
                 </div>
             </div>
-            
+
             <div class="row">
                 <!-- Recent Attendance -->
                 <div class="col-md-6 mb-4">
                     <div class="card h-100">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">Recent Attendance</h5>
+                            <a href="#" class="btn btn-sm btn-outline-primary" data-page="attendance">View All</a>
                         </div>
                         <div class="card-body">
                             ${attendance.length > 0 ? `
@@ -385,16 +386,27 @@ const App = (function() {
                                         </thead>
                                         <tbody>
                                             ${attendance.slice(0, 5).map(record => {
-                                                const status = (record.status || '').toLowerCase();
-                                                const isPresent = status === 'present';
+                                                const statusRaw = record.status || '';
+                                                const status = statusRaw.toLowerCase();
+
+                                                let badgeClass = 'secondary';
+                                                let label = statusRaw;
+
+                                                if (status === 'present') {
+                                                    badgeClass = 'success';
+                                                    label = 'Present';
+                                                } else if (status === 'late') {
+                                                    badgeClass = 'warning';
+                                                    label = 'Late';
+                                                } else if (status === 'absent') {
+                                                    badgeClass = 'danger';
+                                                    label = 'Absent';
+                                                }
+
                                                 return `
                                                     <tr>
                                                         <td>${formatDate(record.date)}</td>
-                                                        <td>
-                                                            <span class="badge bg-${isPresent ? 'success' : 'danger'}">
-                                                                ${isPresent ? 'Present' : 'Absent'}
-                                                            </span>
-                                                        </td>
+                                                        <td><span class="badge bg-${badgeClass}">${label}</span></td>
                                                     </tr>
                                                 `;
                                             }).join('')}
