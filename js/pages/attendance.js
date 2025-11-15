@@ -13,7 +13,7 @@ const AttendancePage = (function() {
         setupEventListeners();
     }
 
-    // Load attendance data for admin view
+    // Load attendance data for admin to view 
     function loadAdminAttendance() {
         const attendance = JSON.parse(localStorage.getItem('attendance') || '[]');
         const students = JSON.parse(localStorage.getItem('students') || '[]');
