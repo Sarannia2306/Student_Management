@@ -140,7 +140,19 @@ const App = (function() {
 
     // Load admin dashboard
     async function loadAdminDashboard() {
-        const students = JSON.parse(localStorage.getItem('students') || '[]');
+        let studentCount = 0;
+        try {
+            if (window.FirebaseAPI?.listStudents) {
+                const list = await window.FirebaseAPI.listStudents();
+                studentCount = Array.isArray(list) ? list.length : 0;
+            } else {
+                const studentsLS = JSON.parse(localStorage.getItem('students') || '[]');
+                studentCount = Array.isArray(studentsLS) ? studentsLS.length : 0;
+            }
+        } catch (_) {
+            const studentsLS = JSON.parse(localStorage.getItem('students') || '[]');
+            studentCount = Array.isArray(studentsLS) ? studentsLS.length : 0;
+        }
         const programs = JSON.parse(localStorage.getItem('programs') || '[]');
         const logs = JSON.parse(localStorage.getItem('activityLogs') || '[]').slice(0, 5);
         
@@ -154,7 +166,7 @@ const App = (function() {
                             <div class="card-icon text-primary mb-3">
                                 <i class="fas fa-users fa-3x"></i>
                             </div>
-                            <h3 class="card-title">${students.length}</h3>
+                            <h3 class="card-title">${studentCount}</h3>
                             <p class="card-text">Total Students</p>
                             <a href="#" class="btn btn-outline-primary btn-sm" data-page="students">View All</a>
                         </div>

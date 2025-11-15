@@ -7,6 +7,8 @@ const VerifyPage = (function() {
     let uid = pending?.uid || current?.uid;
     let email = pending?.email || current?.email;
     const isVerified = (current && current.emailVerified === true) || (pending?.verified === true);
+    const isAdmin = (pending?.role || current?.role) === 'admin';
+    const adminId = pending?.adminId || current?.adminId || '';
 
     document.getElementById('mainContent').innerHTML = `
       <div class="container py-5" style="max-width:540px;">
@@ -17,6 +19,12 @@ const VerifyPage = (function() {
           <div class="card-body">
             ${isVerified ? `<div class="alert alert-success">Your email appears verified. You can log in now.</div>` : ''}
             <p class="text-muted">We sent a verification link to <strong>${email || ''}</strong>. Please open the email and click the link to verify your account.</p>
+            ${isAdmin && adminId ? `
+              <div class="alert alert-warning">
+                <strong>Admin ID:</strong> <span class="ms-1">${adminId}</span>
+                <div class="mt-1">Kindly take note of the ID as you'll be required during login process.</div>
+              </div>
+            ` : ''}
             <div class="d-flex justify-content-between">
               <button type="button" class="btn btn-outline-secondary" id="resendLinkBtn">
                 <i class="fas fa-paper-plane me-1"></i> Resend verification email

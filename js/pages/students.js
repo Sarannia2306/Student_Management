@@ -1,5 +1,12 @@
 // Students Management Page Module
 const StudentsPage = (function() {
+    const state = { students: [] };
+    function maskIC(ic){
+        const s = String(ic || '');
+        if (s.length <= 4) return '*'.repeat(Math.max(0, s.length));
+        const head = s.slice(0,2), tail = s.slice(-2);
+        return head + '*'.repeat(s.length - 4) + tail;
+    }
     // Initialize the students page
     function init() {
         loadStudents();
@@ -8,72 +15,72 @@ const StudentsPage = (function() {
 
     // Load students data
     function loadStudents(searchTerm = '') {
-        const students = JSON.parse(localStorage.getItem('students') || '[]');
-        let filteredStudents = [...students];
-        
-        // Filter students if search term is provided
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            filteredStudents = students.filter(student => 
-                (student.fullName && student.fullName.toLowerCase().includes(term)) ||
-                (student.email && student.email.toLowerCase().includes(term)) ||
-                (student.id && student.id.toString().toLowerCase().includes(term))
-            );
-        }
+        const useFirebase = !!window.FirebaseAPI?.listStudents;
+        const render = (students) => {
+            state.students = students || [];
+            let filteredStudents = [...state.students];
 
-        // Generate students table rows
-        const studentsRows = filteredStudents.map(student => `
-            <tr>
-                <td>${student.id || 'N/A'}</td>
-                <td>
-                    <div class="d-flex align-items-center">
-                        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(student.fullName || 'Student')}&background=4e73df&color=fff&size=40" 
-                             class="rounded-circle me-2" 
-                             alt="${student.fullName || 'Student'}"
-                             style="width: 32px; height: 32px; object-fit: cover;">
-                        <div>
-                            <div class="fw-semibold">${student.fullName || 'N/A'}</div>
-                            <div class="text-muted small">${student.email || ''}</div>
+            // Filter students if search term is provided
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase();
+                filteredStudents = state.students.filter(student => 
+                    (student.fullName && student.fullName.toLowerCase().includes(term)) ||
+                    (student.email && student.email.toLowerCase().includes(term)) ||
+                    ((student.id || student.studentId || '').toString().toLowerCase().includes(term))
+                );
+            }
+            const studentsRows = filteredStudents.map(student => `
+                <tr>
+                    <td>${student.studentId || student.id || 'N/A'}</td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(student.fullName || 'Student')}&background=4e73df&color=fff&size=40" 
+                                 class="rounded-circle me-2" 
+                                 alt="${student.fullName || 'Student'}"
+                                 style="width: 32px; height: 32px; object-fit: cover;">
+                            <div>
+                                <div class="fw-semibold">${student.fullName || 'N/A'}</div>
+                                <div class="text-muted small">${student.email || ''}</div>
+                            </div>
                         </div>
-                    </div>
-                </td>
-                <td>${student.icNumber || 'N/A'}</td>
-                <td>${student.phone || 'N/A'}</td>
-                <td>
-                    <span class="badge bg-info text-dark">${student.academicLevel || 'N/A'}</span>
-                </td>
-                <td>
-                    <span class="badge bg-success">Active</span>
-                </td>
-                <td>
-                    <div class="dropdown
-                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
-                                data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-ellipsis-v"></i>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item view-student" href="#" data-id="${student.id}">
-                                <i class="fas fa-eye me-2"></i>View Details
-                            </a></li>
-                            <li><a class="dropdown-item edit-student" href="#" data-id="${student.id}">
-                                <i class="fas fa-edit me-2"></i>Edit
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item text-danger delete-student" href="#" data-id="${student.id}">
-                                <i class="fas fa-trash-alt me-2"></i>Delete
-                            </a></li>
-                        </ul>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
+                    </td>
+                    <td>${student.maskedIC || student.icNumber || 'N/A'}</td>
+                    <td>${student.phone || 'N/A'}</td>
+                    <td>
+                        <span class="badge bg-info text-dark">${student.academicLevel || 'N/A'}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-success">Active</span>
+                    </td>
+                    <td>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item view-student" href="#" data-id="${student.uid || student.id}">
+                                    <i class="fas fa-eye me-2"></i>View Details
+                                </a></li>
+                                <li><a class="dropdown-item edit-student" href="#" data-id="${student.uid || student.id}">
+                                    <i class="fas fa-edit me-2"></i>Edit
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger delete-student" href="#" data-id="${student.uid || student.id}">
+                                    <i class="fas fa-trash-alt me-2"></i>Delete
+                                </a></li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
 
         // Generate the students table HTML
         const studentsHTML = `
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Students List</h5>
-                    <div class="d-flex
+                    <div class="d-flex">
                         <div class="input-group me-2" style="max-width: 300px;">
                             <span class="input-group-text bg-transparent"><i class="fas fa-search"></i></span>
                             <input type="text" class="form-control" id="searchStudents" placeholder="Search students..." 
@@ -108,7 +115,7 @@ const StudentsPage = (function() {
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="text-muted small">
                             Showing <span class="fw-semibold">${filteredStudents.length}</span> of 
-                            <span class="fw-semibold">${students.length}</span> students
+                            <span class="fw-semibold">${state.students.length}</span> students
                         </div>
                         <nav aria-label="Students pagination">
                             <ul class="pagination pagination-sm mb-0">
@@ -144,18 +151,42 @@ const StudentsPage = (function() {
             </div>
         `;
 
+        // In Firebase mode, hide Add Student (cannot create other users due to DB rules)
+        if (useFirebase) {
+            const addBtn = document.getElementById('addStudentBtn');
+            if (addBtn) addBtn.style.display = 'none';
+        }
         // Re-attach event listeners
         setupEventListeners();
+        };
+
+        if (useFirebase) {
+            window.FirebaseAPI.listStudents()
+                .then(render)
+                .catch((err) => {
+                    try { showAlert('Failed to load students: ' + (err?.message || err), 'danger'); } catch(_){ console.error(err); }
+                    render([]);
+                });
+        } else {
+            const students = JSON.parse(localStorage.getItem('students') || '[]');
+            render(students);
+        }
     }
 
     // Show add/edit student modal
-    function showStudentForm(studentId = null) {
+    async function showStudentForm(studentId = null) {
         let student = null;
         let isEdit = false;
         
         if (studentId) {
-            const students = JSON.parse(localStorage.getItem('students') || '[]');
-            student = students.find(s => s.id === studentId);
+            student = state.students.find(s => (s.uid && s.uid === studentId) || (s.id === studentId));
+            // Fallback: fetch from Firebase if not found in state
+            if (!student && window.FirebaseAPI?.getUserProfile) {
+                try {
+                    const prof = await window.FirebaseAPI.getUserProfile(studentId);
+                    if (prof) student = { ...prof, uid: studentId };
+                } catch (_) {}
+            }
             isEdit = true;
         }
         
@@ -207,14 +238,14 @@ const StudentsPage = (function() {
                                             <div class="col-md-6 mb-3">
                                                 <label for="studentIcNumber" class="form-label">IC/Passport Number <span class="text-danger">*</span></label>
                                                 <input type="text" class="form-control" id="studentIcNumber" 
-                                                       value="${student?.icNumber || ''}" required>
+                                                       value="${student?.maskedIC || student?.icNumber || ''}" readonly required>
                                             </div>
                                         </div>
                                         <div class="row">
                                             <div class="col-md-6 mb-3">
                                                 <label for="studentEmail" class="form-label">Email Address <span class="text-danger">*</span></label>
                                                 <input type="email" class="form-control" id="studentEmail" 
-                                                       value="${student?.email || ''}" required>
+                                                       value="${student?.email || ''}" readonly required>
                                             </div>
                                             <div class="col-md-6 mb-3">
                                                 <label for="studentPhone" class="form-label">Phone Number <span class="text-danger">*</span></label>
@@ -247,6 +278,11 @@ const StudentsPage = (function() {
                                                        value="${student?.nationality || 'Malaysian'}">
                                             </div>
                                         </div>
+                                        <div class="d-flex justify-content-end">
+                                            <button type="button" class="btn btn-primary" id="savePersonalBtn">
+                                                <i class="fas fa-save me-1"></i> Save Personal
+                                            </button>
+                                        </div>
                                     </div>
                                     
                                     <!-- Academic Info Tab -->
@@ -255,29 +291,7 @@ const StudentsPage = (function() {
                                             <div class="col-md-6 mb-3">
                                                 <label for="studentId" class="form-label">Student ID</label>
                                                 <input type="text" class="form-control" id="studentId" 
-                                                       value="${student?.id || generateStudentId()}" readonly>
-                                            </div>
-                                            <div class="col-md-6 mb-3">
-                                                <label for="studentIntake" class="form-label">Intake</label>
-                                                <select class="form-select" id="studentIntake">
-                                                    <option value="">Select Intake</option>
-                                                    <option value="January 2024" ${student?.intake === 'January 2024' ? 'selected' : ''}>January 2024</option>
-                                                    <option value="April 2024" ${student?.intake === 'April 2024' ? 'selected' : ''}>April 2024</option>
-                                                    <option value="July 2024" ${student?.intake === 'July 2024' ? 'selected' : ''}>July 2024</option>
-                                                    <option value="October 2024" ${student?.intake === 'October 2024' ? 'selected' : ''}>October 2024</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-md-6 mb-3">
-                                                <label for="studentProgram" class="form-label">Program</label>
-                                                <select class="form-select" id="studentProgram">
-                                                    <option value="">Select Program</option>
-                                                    <option value="Computer Science" ${student?.program === 'Computer Science' ? 'selected' : ''}>Computer Science</option>
-                                                    <option value="Information Technology" ${student?.program === 'Information Technology' ? 'selected' : ''}>Information Technology</option>
-                                                    <option value="Business Administration" ${student?.program === 'Business Administration' ? 'selected' : ''}>Business Administration</option>
-                                                    <option value="Engineering" ${student?.program === 'Engineering' ? 'selected' : ''}>Engineering</option>
-                                                </select>
+                                                       value="${student?.studentId || student?.id || generateStudentId()}" placeholder="e.g., STU25-1234" readonly>
                                             </div>
                                             <div class="col-md-6 mb-3">
                                                 <label for="studentLevel" class="form-label">Academic Level</label>
@@ -291,16 +305,20 @@ const StudentsPage = (function() {
                                                 </select>
                                             </div>
                                         </div>
-                                        <div class="mb-3">
-                                            <label for="studentCourses" class="form-label">Enrolled Courses</label>
-                                            <select class="form-select" id="studentCourses" multiple>
-                                                <option value="CS101" ${student?.courses?.includes('CS101') ? 'selected' : ''}>CS101 - Introduction to Programming</option>
-                                                <option value="MATH201" ${student?.courses?.includes('MATH201') ? 'selected' : ''}>MATH201 - Calculus</option>
-                                                <option value="ENG101" ${student?.courses?.includes('ENG101') ? 'selected' : ''}>ENG101 - English Composition</option>
-                                                <option value="PHY301" ${student?.courses?.includes('PHY301') ? 'selected' : ''}>PHY301 - Physics</option>
-                                                <option value="CHEM101" ${student?.courses?.includes('CHEM101') ? 'selected' : ''}>CHEM101 - Chemistry</option>
-                                            </select>
-                                            <div class="form-text">Hold Ctrl/Cmd to select multiple courses</div>
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="studentCourse" class="form-label">Course Name</label>
+                                                <input type="text" class="form-control" id="studentCourse" value="${student?.course || ''}" placeholder="e.g., Bachelor's in Computing">
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label for="studentSemester" class="form-label">Semester</label>
+                                                <input type="text" class="form-control" id="studentSemester" value="${student?.semester || ''}" placeholder="e.g., Semester 1">
+                                            </div>
+                                        </div>
+                                        <div class="d-flex justify-content-end">
+                                            <button type="button" class="btn btn-primary" id="saveAcademicBtn">
+                                                <i class="fas fa-save me-1"></i> Save Academic
+                                            </button>
                                         </div>
                                     </div>
                                     
@@ -340,15 +358,17 @@ const StudentsPage = (function() {
                                             <label for="guardianAddress" class="form-label">Address</label>
                                             <textarea class="form-control" id="guardianAddress" rows="2">${student?.guardian?.address || ''}</textarea>
                                         </div>
+                                        <div class="d-flex justify-content-end">
+                                            <button type="button" class="btn btn-primary" id="saveGuardianBtn">
+                                                <i class="fas fa-save me-1"></i> Save Guardian
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                                    <i class="fas fa-times me-1"></i> Cancel
-                                </button>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-save me-1"></i> ${isEdit ? 'Update' : 'Save'} Student
+                                    <i class="fas fa-times me-1"></i> Close
                                 </button>
                             </div>
                         </form>
@@ -357,27 +377,105 @@ const StudentsPage = (function() {
             </div>
         `;
         
+        // If view details modal is open, close and remove it to avoid stacking
+        try {
+            const viewEl = document.getElementById('studentDetailsModal');
+            if (viewEl) {
+                try { (bootstrap.Modal.getInstance(viewEl) || new bootstrap.Modal(viewEl)).hide(); } catch(_) {}
+                setTimeout(() => { try { viewEl.remove(); } catch(_) {} }, 150);
+            }
+        } catch(_) {}
+
         // Add modal to the DOM
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         
         // Initialize the modal
-        const modal = new bootstrap.Modal(document.getElementById('studentFormModal'));
+        const modalRoot = document.getElementById('studentFormModal');
+        const modal = new bootstrap.Modal(modalRoot);
         modal.show();
         
-        // Initialize select2 for better dropdowns (if available)
-        if (typeof $ !== 'undefined' && $.fn.select2) {
-            $('#studentCourses').select2({
-                placeholder: 'Select courses',
-                width: '100%',
-                dropdownParent: $('#studentFormModal')
-            });
-        }
-        
-        // Handle form submission
-        document.getElementById('studentForm')?.addEventListener('submit', function(e) {
-            e.preventDefault();
-            saveStudent(student?.id);
-        });
+        // Per-tab save handlers
+        const key = student?.uid || student?.id || null;
+        const savePersonal = async () => {
+            const fullName = (modalRoot.querySelector('#studentFullName')?.value || '').trim();
+            const email = (modalRoot.querySelector('#studentEmail')?.value || '').trim();
+            const phone = (modalRoot.querySelector('#studentPhone')?.value || '').trim();
+            const address = (modalRoot.querySelector('#studentAddress')?.value || '').trim();
+            const gender = (modalRoot.querySelector('#studentGender')?.value || '').trim();
+            const dob = (modalRoot.querySelector('#studentDob')?.value || '').trim();
+            const nationality = (modalRoot.querySelector('#studentNationality')?.value || '').trim();
+            const missing = [];
+            if (!fullName) missing.push('Full Name');
+            if (!email) missing.push('Email');
+            if (!phone) missing.push('Phone');
+            if (missing.length) {
+                showAlert(`Please fill in all required fields in Personal Info: ${missing.join(', ')}`, 'danger');
+                return;
+            }
+            const data = { fullName, email, phone, address, gender, dob, nationality, role: 'student', updatedAt: new Date().toISOString() };
+            if (window.FirebaseAPI?.updateUserProfile && key) {
+                try { await window.FirebaseAPI.updateUserProfile(key, data); showAlert('Personal information saved successfully', 'success'); }
+                catch (e) { showAlert('Failed to save personal information: ' + (e?.message || e), 'danger'); }
+            } else {
+                // localStorage fallback
+                const students = JSON.parse(localStorage.getItem('students') || '[]');
+                const idx = students.findIndex(s => s.id === key);
+                if (idx !== -1) { students[idx] = { ...students[idx], ...data }; localStorage.setItem('students', JSON.stringify(students)); showAlert('Personal information saved', 'success'); }
+            }
+        };
+        const saveAcademic = async () => {
+            const studentIdVal = (modalRoot.querySelector('#studentId')?.value || '').trim();
+            const academicLevel = (modalRoot.querySelector('#studentLevel')?.value || '').trim();
+            const course = (modalRoot.querySelector('#studentCourse')?.value || '').trim();
+            const semester = (modalRoot.querySelector('#studentSemester')?.value || '').trim();
+            const email = (modalRoot.querySelector('#studentEmail')?.value || '').trim();
+            const missing = [];
+            if (!studentIdVal) missing.push('Student ID');
+            if (!academicLevel) missing.push('Academic Level');
+            if (!course) missing.push('Course');
+            if (!semester) missing.push('Semester');
+            if (missing.length) {
+                showAlert(`Please fill in all required fields in Academic Info: ${missing.join(', ')}`, 'danger');
+                return;
+            }
+            const data = { studentId: studentIdVal, academicLevel, course, semester, role: 'student', email, updatedAt: new Date().toISOString() };
+            if (window.FirebaseAPI?.updateUserProfile && key) {
+                try { await window.FirebaseAPI.updateUserProfile(key, data); showAlert('Academic information saved successfully', 'success'); }
+                catch (e) { showAlert('Failed to save academic information: ' + (e?.message || e), 'danger'); }
+            } else {
+                const students = JSON.parse(localStorage.getItem('students') || '[]');
+                const idx = students.findIndex(s => s.id === key);
+                if (idx !== -1) { students[idx] = { ...students[idx], ...data }; localStorage.setItem('students', JSON.stringify(students)); showAlert('Academic information saved', 'success'); }
+            }
+        };
+        const saveGuardian = async () => {
+            const name = (modalRoot.querySelector('#guardianName')?.value || '').trim();
+            const relationship = (modalRoot.querySelector('#guardianRelationship')?.value || '').trim();
+            const phone = (modalRoot.querySelector('#guardianPhone')?.value || '').trim();
+            const email = (modalRoot.querySelector('#guardianEmail')?.value || '').trim();
+            const address = (modalRoot.querySelector('#guardianAddress')?.value || '').trim();
+            const missing = [];
+            if (!name) missing.push('Guardian Name');
+            if (!relationship) missing.push('Relationship');
+            if (!phone) missing.push('Guardian Phone');
+            if (!email) missing.push('Guardian Email');
+            if (missing.length) {
+                showAlert(`Please fill in all required fields in Guardian Info: ${missing.join(', ')}`, 'danger');
+                return;
+            }
+            const data = { guardian: { name, relationship, phone, email, address }, role: 'student', updatedAt: new Date().toISOString() };
+            if (window.FirebaseAPI?.updateUserProfile && key) {
+                try { await window.FirebaseAPI.updateUserProfile(key, data); showAlert('Guardian information saved successfully', 'success'); }
+                catch (e) { showAlert('Failed to save guardian information: ' + (e?.message || e), 'danger'); }
+            } else {
+                const students = JSON.parse(localStorage.getItem('students') || '[]');
+                const idx = students.findIndex(s => s.id === key);
+                if (idx !== -1) { students[idx] = { ...students[idx], ...data }; localStorage.setItem('students', JSON.stringify(students)); showAlert('Guardian information saved', 'success'); }
+            }
+        };
+        document.getElementById('savePersonalBtn')?.addEventListener('click', savePersonal);
+        document.getElementById('saveAcademicBtn')?.addEventListener('click', saveAcademic);
+        document.getElementById('saveGuardianBtn')?.addEventListener('click', saveGuardian);
         
         // Remove modal from DOM when hidden
         document.getElementById('studentFormModal').addEventListener('hidden.bs.modal', function() {
@@ -385,92 +483,87 @@ const StudentsPage = (function() {
         });
     }
     
-    // Generate a new student ID
+    // Generate a new student ID: STU<YY>-<4digits>
     function generateStudentId() {
-        const prefix = 'STU';
-        const randomNum = Math.floor(10000 + Math.random() * 90000);
-        return `${prefix}${randomNum}`;
+        const yy = String(new Date().getFullYear()).slice(-2);
+        const rnd4 = Math.floor(1000 + Math.random() * 9000);
+        return `STU${yy}-${rnd4}`;
     }
     
     // Save student data
-    function saveStudent(studentId = null) {
-        const students = JSON.parse(localStorage.getItem('students') || '[]');
-        const isEdit = !!studentId;
-        
-        // Get form data
-        const studentData = {
-            id: studentId || generateStudentId(),
+    function saveStudent(studentKey = null) {
+        const useFirebase = !!window.FirebaseAPI?.updateUserProfile;
+        const isEdit = !!studentKey;
+
+        // Get form data (aligned to requested editable fields)
+        const updateData = {
             fullName: document.getElementById('studentFullName').value,
-            icNumber: document.getElementById('studentIcNumber').value,
             email: document.getElementById('studentEmail').value,
             phone: document.getElementById('studentPhone').value,
             address: document.getElementById('studentAddress').value,
             gender: document.getElementById('studentGender').value,
             dob: document.getElementById('studentDob').value,
             nationality: document.getElementById('studentNationality').value,
-            intake: document.getElementById('studentIntake').value,
-            program: document.getElementById('studentProgram').value,
+            studentId: document.getElementById('studentId').value,
             academicLevel: document.getElementById('studentLevel').value,
-            courses: Array.from(document.getElementById('studentCourses').selectedOptions).map(opt => opt.value),
-            guardian: {
-                name: document.getElementById('guardianName').value,
-                relationship: document.getElementById('guardianRelationship').value,
-                phone: document.getElementById('guardianPhone').value,
-                email: document.getElementById('guardianEmail').value,
-                address: document.getElementById('guardianAddress').value
-            },
-            status: 'Active',
-            createdAt: isEdit ? students.find(s => s.id === studentId)?.createdAt : new Date().toISOString(),
+            course: document.getElementById('studentCourse').value,
+            semester: document.getElementById('studentSemester').value,
+            role: 'student',
             updatedAt: new Date().toISOString()
         };
-        
-        // Validate required fields
-        if (!studentData.fullName || !studentData.icNumber || !studentData.email || !studentData.phone) {
+
+        // Basic validation
+        if (!updateData.fullName || !updateData.email || !updateData.phone) {
             showAlert('Please fill in all required fields', 'danger');
             return;
         }
-        
-        // Check if email already exists (for new students or when email is changed)
-        const emailExists = students.some(s => 
-            s.email === studentData.email && (!isEdit || s.id !== studentId)
-        );
-        
-        if (emailExists) {
-            showAlert('A student with this email already exists', 'danger');
+
+        if (useFirebase && isEdit) {
+            (async () => {
+                try {
+                    await window.FirebaseAPI.updateUserProfile(studentKey, updateData);
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('studentFormModal'));
+                    if (modal) modal.hide();
+                    loadStudents();
+                    showAlert('Student updated successfully!', 'success');
+                    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                    App.logActivity(`Updated student: ${updateData.fullName} (${studentKey})`, currentUser.email);
+                } catch (err) {
+                    showAlert('Failed to update student: ' + (err?.message || err), 'danger');
+                }
+            })();
+            // Firebase: update existing user profile by uid
             return;
         }
-        
-        // Save to localStorage
+
+        // LocalStorage fallback (supports Add/Edit)
+        const students = JSON.parse(localStorage.getItem('students') || '[]');
         if (isEdit) {
-            // Update existing student
-            const index = students.findIndex(s => s.id === studentId);
-            if (index !== -1) {
-                students[index] = { ...students[index], ...studentData };
+            const idx = students.findIndex(s => s.id === studentKey);
+            if (idx !== -1) {
+                const createdAt = students[idx].createdAt || new Date().toISOString();
+                students[idx] = { ...students[idx], ...updateData, id: studentKey, createdAt };
             }
         } else {
-            // Add new student
-            students.push(studentData);
+            const id = generateStudentId();
+            students.push({ ...updateData, id, status: 'Active', createdAt: new Date().toISOString() });
         }
-        
         localStorage.setItem('students', JSON.stringify(students));
-        
-        // Close the modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('studentFormModal'));
         if (modal) modal.hide();
-        
-        // Reload the students list
         loadStudents();
-        
-        // Show success message
         showAlert(`Student ${isEdit ? 'updated' : 'added'} successfully!`, 'success');
-        
-        // Log the activity
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        App.logActivity(`${isEdit ? 'Updated' : 'Added'} student: ${studentData.fullName} (${studentData.id})`, currentUser.email);
+        App.logActivity(`${isEdit ? 'Updated' : 'Added'} student: ${updateData.fullName} (${updateData.studentId || studentKey || ''})`, currentUser.email);
     }
     
     // Delete student
     function deleteStudent(studentId) {
+        if (window.FirebaseAPI?.updateUserProfile) {
+            // Admin cannot delete user profiles due to database rules; show message
+            showAlert('Deleting students is not supported from Admin panel.', 'warning');
+            return;
+        }
         if (!confirm('Are you sure you want to delete this student? This action cannot be undone.')) {
             return;
         }
@@ -499,19 +592,19 @@ const StudentsPage = (function() {
     }
     
     // View student details
-    function viewStudentDetails(studentId) {
-        const students = JSON.parse(localStorage.getItem('students') || '[]');
-        const student = students.find(s => s.id === studentId);
-        
+    async function viewStudentDetails(studentId) {
+        let student = state.students.find(s => (s.uid && s.uid === studentId) || (s.id === studentId));
+        // Fetch latest from Firebase to include guardian/status updates
+        if ((!student || !student.guardian) && window.FirebaseAPI?.getUserProfile) {
+            try {
+                const prof = await window.FirebaseAPI.getUserProfile(studentId);
+                if (prof) student = { ...prof, uid: studentId };
+            } catch (_) {}
+        }
         if (!student) {
             showAlert('Student not found', 'danger');
             return;
         }
-        
-        // Format courses for display
-        const coursesList = student.courses?.length 
-            ? student.courses.map(course => `<span class="badge bg-secondary me-1 mb-1">${course}</span>`).join('')
-            : 'No courses enrolled';
         
         // Format guardian info
         const guardianInfo = student.guardian ? `
@@ -555,8 +648,8 @@ const StudentsPage = (function() {
                                     <h5 class="mb-1">${student.fullName || 'N/A'}</h5>
                                     <span class="badge bg-primary">${student.academicLevel || 'N/A'}</span>
                                     <div class="mt-2">
-                                        <span class="badge ${student.status === 'Active' ? 'bg-success' : 'bg-secondary'}">
-                                            ${student.status || 'Inactive'}
+                                        <span class="badge ${(student.status || 'Active') === 'Active' ? 'bg-success' : 'bg-secondary'}">
+                                            ${student.status || 'Active'}
                                         </span>
                                     </div>
                                 </div>
@@ -568,8 +661,8 @@ const StudentsPage = (function() {
                                         <div class="card-body">
                                             <div class="row">
                                                 <div class="col-md-6">
-                                                    <p class="mb-1"><strong>Student ID:</strong> ${student.id || 'N/A'}</p>
-                                                    <p class="mb-1"><strong>IC/Passport:</strong> ${student.icNumber || 'N/A'}</p>
+                                                    <p class="mb-1"><strong>Student ID:</strong> ${student.studentId || student.id || 'N/A'}</p>
+                                                    <p class="mb-1"><strong>IC/Passport:</strong> ${student.maskedIC || student.icNumber || 'N/A'}</p>
                                                     <p class="mb-1"><strong>Gender:</strong> ${student.gender || 'N/A'}</p>
                                                     <p class="mb-1"><strong>Date of Birth:</strong> ${student.dob ? new Date(student.dob).toLocaleDateString() : 'N/A'}</p>
                                                 </div>
@@ -593,17 +686,13 @@ const StudentsPage = (function() {
                                         <div class="card-body">
                                             <div class="row">
                                                 <div class="col-md-6">
-                                                    <p class="mb-1"><strong>Program:</strong> ${student.program || 'N/A'}</p>
+                                                    <p class="mb-1"><strong>Course:</strong> ${student.course || 'N/A'}</p>
                                                     <p class="mb-1"><strong>Level:</strong> ${student.academicLevel || 'N/A'}</p>
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <p class="mb-1"><strong>Intake:</strong> ${student.intake || 'N/A'}</p>
-                                                    <p class="mb-1"><strong>Status:</strong> ${student.status || 'N/A'}</p>
+                                                    <p class="mb-1"><strong>Semester:</strong> ${student.semester || 'N/A'}</p>
+                                                    <p class="mb-1"><strong>Status:</strong> ${student.status || 'Active'}</p>
                                                 </div>
-                                            </div>
-                                            <div class="mt-2">
-                                                <p class="mb-1"><strong>Enrolled Courses:</strong></p>
-                                                <div>${coursesList}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -612,8 +701,8 @@ const StudentsPage = (function() {
                             
                             ${guardianInfo}
                         </div>
-                        <div class="modal-footer
-                            <button type="button" class="btn btn-primary" onclick="StudentsPage.editStudent('${student.id}')">
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" onclick="StudentsPage.editStudent('${student.uid || student.id}')">
                                 <i class="fas fa-edit me-1"></i> Edit Student
                             </button>
                             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
@@ -698,14 +787,29 @@ const StudentsPage = (function() {
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         `;
         
-        // Add alert to the page
-        const container = document.querySelector('.container-fluid') || document.body;
-        container.insertBefore(alertDiv, container.firstChild);
+        // Prefer placing inside an open modal so it's visible above the backdrop
+        const modalBody = document.querySelector('#studentFormModal.show .modal-body') || document.querySelector('#studentFormModal .modal-body');
+        const modalContent = document.querySelector('#studentFormModal.show .modal-content') || document.querySelector('#studentFormModal .modal-content');
+        const globalContainer = document.querySelector('.container-fluid') || document.body;
+        const container = modalBody || modalContent || document.querySelector('.modal.show .modal-body') || document.querySelector('.modal.show .modal-content') || globalContainer;
+        
+        if (container.firstChild) {
+            container.insertBefore(alertDiv, container.firstChild);
+        } else {
+            container.appendChild(alertDiv);
+        }
+        
+        // Ensure alert is visible at top of modal
+        try { container.scrollTop = 0; } catch(_) {}
         
         // Auto-dismiss after 5 seconds
         setTimeout(() => {
-            const alert = bootstrap.Alert.getOrCreateInstance(alertDiv);
-            if (alert) alert.close();
+            try {
+                const alert = bootstrap.Alert.getOrCreateInstance(alertDiv);
+                if (alert) alert.close();
+            } catch(_) {
+                alertDiv.remove();
+            }
         }, 5000);
     }
     

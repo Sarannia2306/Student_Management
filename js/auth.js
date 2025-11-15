@@ -145,11 +145,13 @@ const Auth = (function() {
         e.preventDefault();
         const email = document.getElementById('adminEmail').value.trim();
         const password = document.getElementById('adminPassword').value;
+        const adminIdCode = (document.getElementById('adminIdCode')?.value || '').trim();
         const rememberMe = document.getElementById('rememberMe').checked;
         
         if (!email){ showAlert('Email is required', 'danger'); document.getElementById('adminEmail').focus(); return; }
         if (!isValidEmail(email)){ showAlert('Please enter a valid email', 'danger'); document.getElementById('adminEmail').focus(); return; }
         if (!password){ showAlert('Password is required', 'danger'); document.getElementById('adminPassword').focus(); return; }
+        if (!/^\d{4}$/.test(adminIdCode)) { showAlert('Please enter your 4-digit Admin ID (from AD-1234)', 'danger'); document.getElementById('adminIdCode')?.focus(); return; }
         
         try {
             if (window.FirebaseAPI?.signIn) {
@@ -160,9 +162,18 @@ const Auth = (function() {
                 if (!(user.emailVerified || user.verified === true)) {
                     localStorage.setItem('pendingVerification', JSON.stringify({ uid: user.uid, email: user.email, role: 'admin' }));
                     showAlert('Please verify your email via the link we sent to your inbox.', 'warning');
-                    try { await window.FirebaseAPI?.doSignOut?.(); } catch(_){}
+                    try { await window.FirebaseAPI?.doSignOut?.(); } catch(_){ }
                     if (typeof App !== 'undefined') App.loadPage('verify');
                     return;
+                }
+                // Verify 4-digit Admin ID matches profile
+                let profile = null;
+                try { profile = await window.FirebaseAPI?.getUserProfile?.(user.uid); } catch(_) {}
+                const adminId = profile?.adminId || user?.adminId || '';
+                const last4 = String(adminId).slice(-4);
+                if (!last4 || last4 !== adminIdCode) {
+                    try { await window.FirebaseAPI?.doSignOut?.(); } catch(_) {}
+                    return showAlert('Invalid Admin ID. Enter the 4 digits after AD- on your Admin ID.', 'danger');
                 }
                 const userData = { ...user, role: 'admin', lastLogin: new Date().toISOString() };
                 localStorage.setItem('currentUser', JSON.stringify(userData));
@@ -170,6 +181,8 @@ const Auth = (function() {
                 const admins = JSON.parse(localStorage.getItem('admins') || '[]');
                 const admin = admins.find(a => a.email === email && a.password === password);
                 if (!admin) return showAlert('Invalid admin email or password', 'danger');
+                const last4 = String(admin.adminId || '').slice(-4);
+                if (!/^\d{4}$/.test(adminIdCode) || last4 !== adminIdCode) return showAlert('Invalid Admin ID. Enter the 4 digits after AD- on your Admin ID.', 'danger');
                 const userData = { id: admin.id, email: admin.email, name: admin.fullName, role: 'admin', ...admin, lastLogin: new Date().toISOString() };
                 localStorage.setItem('currentUser', JSON.stringify(userData));
                 const updatedAdmins = admins.map(a => a.id === admin.id ? { ...a, lastLogin: userData.lastLogin } : a);
@@ -194,20 +207,21 @@ const Auth = (function() {
         const agreed = !!document.getElementById('studentAgree')?.checked;
         if (!agreed) { showAlert('Please agree to the Terms & Conditions to continue', 'danger'); document.getElementById('studentAgree')?.focus(); return; }
         
+        // Generate default student ID: STU<YY>-<4digits>
+        const yy = String(new Date().getFullYear()).slice(-2);
+        const rnd4 = Math.floor(1000 + Math.random() * 9000);
+        const studentId = `STU${yy}-${rnd4}`;
+
         const formData = {
-            id: document.getElementById('studentId').value.trim(),
             fullName: document.getElementById('studentFullName').value.trim(),
-            academicLevel: document.getElementById('academicLevel').value,
             email: document.getElementById('studentRegEmail').value.trim().toLowerCase(),
             phone: document.getElementById('studentPhone').value.trim(),
-            course: document.getElementById('courseName').value.trim(),
             icNumber: document.getElementById('studentIC').value.trim(),
             password: document.getElementById('studentRegPassword').value,
             confirmPassword: document.getElementById('confirmStudentPassword').value,
             role: 'student',
             registeredAt: new Date().toISOString()
         };
-        if (!formData.id){ showAlert('Student ID is required', 'danger'); document.getElementById('studentId').focus(); return; }
         if (!formData.fullName){ showAlert('Full name is required', 'danger'); document.getElementById('studentFullName').focus(); return; }
         if (!isValidEmail(formData.email)){ showAlert('Please enter a valid email', 'danger'); document.getElementById('studentRegEmail').focus(); return; }
         if (!formData.password){ showAlert('Password is required', 'danger'); document.getElementById('studentRegPassword').focus(); return; }
@@ -222,11 +236,9 @@ const Auth = (function() {
                 // Hash IC (no pre-auth DB reads). We'll enforce uniqueness by index write after registration.
                 const icHash = await window.FirebaseAPI.sha256Hex(formData.icNumber);
                 const created = await window.FirebaseAPI.registerUser(formData.email, formData.password, 'student', {
-                    id: formData.id,
+                    studentId: studentId,
                     fullName: formData.fullName,
-                    academicLevel: formData.academicLevel,
                     phone: formData.phone,
-                    course: formData.course,
                     icHash: icHash,
                     maskedIC: maskIC(formData.icNumber)
                 });
@@ -248,8 +260,8 @@ const Auth = (function() {
             } else {
                 const students = JSON.parse(localStorage.getItem('students') || '[]');
                 if (students.some(s => s.email === formData.email)) return showAlert('Email already registered', 'danger');
-                if (students.some(s => s.id === formData.id)) return showAlert('Student ID already exists', 'danger');
                 const { confirmPassword, ...studentData } = formData;
+                studentData.studentId = studentId;
                 studentData.maskedIC = maskIC(studentData.icNumber);
                 students.push(studentData);
                 localStorage.setItem('students', JSON.stringify(students));
@@ -278,8 +290,10 @@ const Auth = (function() {
         const agreed = !!document.getElementById('adminAgree')?.checked;
         if (!agreed) { showAlert('Please agree to the Terms & Conditions to continue', 'danger'); document.getElementById('adminAgree')?.focus(); return; }
         
+        // Generate Admin ID: AD-<4digits>
+        const adminId = `AD-${Math.floor(1000 + Math.random() * 9000)}`;
+
         const formData = {
-            id: document.getElementById('adminId').value.trim(),
             fullName: document.getElementById('adminFullName').value.trim(),
             email: document.getElementById('adminRegEmail').value.trim().toLowerCase(),
             phone: document.getElementById('adminPhone').value.trim(),
@@ -289,7 +303,6 @@ const Auth = (function() {
             role: 'admin',
             registeredAt: new Date().toISOString()
         };
-        if (!formData.id){ showAlert('Admin ID is required', 'danger'); document.getElementById('adminId').focus(); return; }
         if (!formData.fullName){ showAlert('Full name is required', 'danger'); document.getElementById('adminFullName').focus(); return; }
         if (!isValidEmail(formData.email)){ showAlert('Please enter a valid email', 'danger'); document.getElementById('adminRegEmail').focus(); return; }
         if (!formData.password){ showAlert('Password is required', 'danger'); document.getElementById('adminRegPassword').focus(); return; }
@@ -303,7 +316,7 @@ const Auth = (function() {
             if (window.FirebaseAPI?.registerUser) {
                 const icHash = await window.FirebaseAPI.sha256Hex(formData.icNumber);
                 const created = await window.FirebaseAPI.registerUser(formData.email, formData.password, 'admin', {
-                    id: formData.id,
+                    adminId: adminId,
                     fullName: formData.fullName,
                     phone: formData.phone,
                     icHash: icHash,
@@ -316,39 +329,34 @@ const Auth = (function() {
                     try { await window.FirebaseAPI?.doSignOut?.(); } catch(_){}
                     return;
                 }
-                // Email verification already sent by Firebase on registration
-                localStorage.setItem('pendingVerification', JSON.stringify({ uid: created.uid, email: formData.email, role: 'admin' }));
+                // Require email verification like student; show admin ID on Verify page
+                localStorage.setItem('pendingVerification', JSON.stringify({ uid: created.uid, email: formData.email, role: 'admin', adminId }));
                 const regEl = document.getElementById('registerModal');
                 if (regEl) { try { (bootstrap.Modal.getInstance(regEl) || new bootstrap.Modal(regEl)).hide(); } catch(_){} }
                 if (typeof App !== 'undefined') App.loadPage('verify');
+                App.logActivity('New admin registered (pending verification)', formData.email);
                 return;
             } else {
                 const admins = JSON.parse(localStorage.getItem('admins') || '[]');
                 if (admins.some(a => a.email === formData.email)) return showAlert('Admin email already registered', 'danger');
-                if (admins.some(a => a.id === formData.id)) return showAlert('Admin ID already exists', 'danger');
                 const { confirmPassword, ...adminData } = formData;
+                adminData.adminId = adminId;
                 adminData.maskedIC = maskIC(adminData.icNumber);
                 admins.push(adminData);
                 localStorage.setItem('admins', JSON.stringify(admins));
+                // LocalStorage mode: mimic verify flow by showing login modal and a notice
+                const regEl = document.getElementById('registerModal');
+                if (regEl) { try { (bootstrap.Modal.getInstance(regEl) || new bootstrap.Modal(regEl)).hide(); } catch(_){} }
+                const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                loginModal.show();
+                showAlert(`Your Admin ID is ${adminId}. Kindly take note as it is required during Admin Login.`, 'warning');
             }
             App.logActivity('New admin registered', formData.email);
-            showAlert('Admin registration successful! Please log in.', 'success');
         } catch (err) {
             return showAlert(mapAuthError(err), 'danger');
         }
-        
-        // Switch to login
-        const registerModal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
-        const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-        registerModal.hide();
-        loginModal.show();
-        
-        // Pre-fill email in login form
-        document.getElementById('adminLogin').click();
-        document.getElementById('adminEmail').value = formData.email;
-        document.getElementById('adminPassword').focus();
+        // Done
     }
-    
     // Handle logout
     function handleLogout() {
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
@@ -399,27 +407,29 @@ const Auth = (function() {
     
     // Toggle between login types
     function setupLoginTypeToggle() {
-        // Toggle between student and admin login
+        // Toggle between student and admin login (prompt for Admin ID 4 digits when switching to Admin)
         document.querySelectorAll('input[name="loginType"]').forEach(radio => {
             radio.addEventListener('change', function() {
-                const isSelectingAdmin = this.id === 'adminLogin' && this.checked;
-                if (isSelectingAdmin) {
-                    // Prompt for admin access code before allowing switch
-                    const code = window.prompt('Enter Admin Access Code');
-                    if (code !== '115416') {
-                        // Revert to student tab and keep student fields visible
+                const switchingToAdmin = this.id === 'adminLogin' && this.checked;
+                if (switchingToAdmin) {
+                    const code = window.prompt('Enter Admin Access Code (4 digits from your Admin ID, e.g. AD-1234). This code will be verified after you enter your email and password.');
+                    if (!/^\d{4}$/.test(code || '')) {
+                        // Revert to Student tab on invalid/missing code
                         const studentRadio = document.getElementById('studentLogin');
                         if (studentRadio) studentRadio.checked = true;
                         document.getElementById('studentLoginFields').style.display = 'block';
                         document.getElementById('adminLoginFields').style.display = 'none';
-                        try { showAlert('Invalid Admin Access Code', 'danger'); } catch(_){}
+                        try { showAlert('Invalid Admin ID. Please enter the 4 digits from AD-1234.', 'danger'); } catch(_) {}
                         return;
                     }
+                    // Populate Admin ID field for convenience
+                    const adminIdInput = document.getElementById('adminIdCode');
+                    if (adminIdInput) adminIdInput.value = code;
                 }
+
                 const isStudentLogin = document.getElementById('studentLogin').checked;
                 document.getElementById('studentLoginFields').style.display = isStudentLogin ? 'block' : 'none';
                 document.getElementById('adminLoginFields').style.display = isStudentLogin ? 'none' : 'block';
-                // Update register prompt
                 document.getElementById('registerPrompt').textContent = isStudentLogin ?
                     "Don't have a student account? " :
                     "Don't have an admin account? ";
@@ -494,6 +504,22 @@ const Auth = (function() {
                 }
             });
         }
+        // Forgot password (student)
+        document.getElementById('forgotStudentPwd')?.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const email = (document.getElementById('studentEmail')?.value || '').trim();
+            if (!isValidEmail(email)) { showAlert('Enter your student email to reset password', 'warning'); return; }
+            try { await window.FirebaseAPI?.sendPasswordReset?.(email); showAlert('Password reset email sent. Please check your inbox.', 'success'); }
+            catch (err) { showAlert(mapAuthError(err), 'danger'); }
+        });
+        // Forgot password (admin)
+        document.getElementById('forgotAdminPwd')?.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const email = (document.getElementById('adminEmail')?.value || '').trim();
+            if (!isValidEmail(email)) { showAlert('Enter your admin email to reset password', 'warning'); return; }
+            try { await window.FirebaseAPI?.sendPasswordReset?.(email); showAlert('Password reset email sent. Please check your inbox.', 'success'); }
+            catch (err) { showAlert(mapAuthError(err), 'danger'); }
+        });
         
         // Event listeners for registration forms
         const studentRegisterForm = document.getElementById('studentRegisterForm');
