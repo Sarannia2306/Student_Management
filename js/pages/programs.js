@@ -6,13 +6,16 @@ const ProgramsPage = (function() {
         setupEventListeners();
     }
 
-    // Load programs data
+    // Load programs data (Firebase first, fallback to localStorage)
     function loadPrograms(searchTerm = '') {
-        let programs = JSON.parse(localStorage.getItem('programs') || '[]');
-        
-        // If no programs exist, create sample data
-        if (programs.length === 0) {
-            programs = [
+        const useFirebase = !!window.FirebaseAPI?.listPrograms;
+
+        const render = (programsRaw) => {
+            let programs = Array.isArray(programsRaw) ? programsRaw : [];
+
+            // If no programs exist (and not using Firebase), create sample data for demo
+            if (!useFirebase && programs.length === 0) {
+                programs = [
                 {
                     id: 'PROG001',
                     name: 'Computer Science',
@@ -43,9 +46,13 @@ const ProgramsPage = (function() {
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString()
                 }
-            ];
-            localStorage.setItem('programs', JSON.stringify(programs));
-        }
+                ];
+            }
+
+            // Always sync latest programs list to localStorage so View/Edit can use it
+            try {
+                localStorage.setItem('programs', JSON.stringify(programs));
+            } catch (_) {}
 
         // Filter programs if search term is provided
         let filteredPrograms = [...programs];
@@ -183,6 +190,19 @@ const ProgramsPage = (function() {
         
         // Re-attach event listeners
         setupEventListeners();
+        };
+
+        if (useFirebase) {
+            window.FirebaseAPI.listPrograms()
+                .then(render)
+                .catch((err) => {
+                    try { showAlert('Failed to load programs: ' + (err?.message || err), 'danger'); } catch(_) { console.error(err); }
+                    render([]);
+                });
+        } else {
+            const programsLS = JSON.parse(localStorage.getItem('programs') || '[]');
+            render(programsLS);
+        }
     }
     
     // Show add/edit program modal
@@ -196,17 +216,24 @@ const ProgramsPage = (function() {
             isEdit = true;
         }
         
-        // Get available courses for the courses multi-select
-        const courses = JSON.parse(localStorage.getItem('courses') || '[]');
-        const coursesOptions = courses.map(course => 
-            `<option value="${course.code}" ${program?.courses?.includes(course.code) ? 'selected' : ''}>
-                ${course.code} - ${course.name}
-            </option>`
-        ).join('');
-        
+        // Prepare existing subjects (courses) if any
+        const existingSubjects = Array.isArray(program?.courses) ? program.courses : [];
+        const subjectsRowsHTML = existingSubjects.map((subj, index) => `
+            <tr class="subject-row" data-index="${index}">
+                <td><input type="text" class="form-control subject-code" value="${subj.code || ''}" placeholder="e.g., A1506"></td>
+                <td><input type="text" class="form-control subject-name" value="${subj.name || ''}" placeholder="Subject name"></td>
+                <td><input type="number" class="form-control subject-credits" value="${subj.credits || ''}" min="0" step="1"></td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-subject-row">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
         const modalHTML = `
             <div class="modal fade" id="programFormModal" tabindex="-1" aria-labelledby="programFormModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-lg">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title" id="programFormModalLabel">
@@ -216,76 +243,110 @@ const ProgramsPage = (function() {
                         </div>
                         <form id="programForm">
                             <div class="modal-body">
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="programName" class="form-label">Program Name <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control" id="programName" 
-                                               value="${program?.name || ''}" required>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="programCode" class="form-label">Program Code <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control" id="programCode" 
-                                               value="${program?.code || ''}" required>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="programLevel" class="form-label">Level <span class="text-danger">*</span></label>
-                                        <select class="form-select" id="programLevel" required>
-                                            <option value="">Select Level</option>
-                                            <option value="Foundation" ${program?.level === 'Foundation' ? 'selected' : ''}>Foundation</option>
-                                            <option value="Diploma" ${program?.level === 'Diploma' ? 'selected' : ''}>Diploma</option>
-                                            <option value="Degree" ${program?.level === 'Degree' ? 'selected' : ''}>Degree</option>
-                                            <option value="Masters" ${program?.level === 'Masters' ? 'selected' : ''}>Masters</option>
-                                            <option value="PhD" ${program?.level === 'PhD' ? 'selected' : ''}>PhD</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="programDepartment" class="form-label">Department <span class="text-danger">*</span></label>
-                                        <select class="form-select" id="programDepartment" required>
-                                            <option value="">Select Department</option>
-                                            <option value="Computing" ${program?.department === 'Computing' ? 'selected' : ''}>Computing</option>
-                                            <option value="Business" ${program?.department === 'Business' ? 'selected' : ''}>Business</option>
-                                            <option value="Engineering" ${program?.department === 'Engineering' ? 'selected' : ''}>Engineering</option>
-                                            <option value="Science" ${program?.department === 'Science' ? 'selected' : ''}>Science</option>
-                                            <option value="Arts" ${program?.department === 'Arts' ? 'selected' : ''}>Arts</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="programDuration" class="form-label">Duration <span class="text-danger">*</span></label>
-                                        <div class="input-group">
-                                            <input type="number" class="form-control" id="programDuration" 
-                                                   value="${program?.duration?.split(' ')[0] || ''}" required>
-                                            <select class="form-select" id="programDurationUnit" style="max-width: 100px;">
-                                                <option value="months" ${program?.duration?.includes('month') ? 'selected' : ''}>Months</option>
-                                                <option value="years" ${!program?.duration || program?.duration?.includes('year') ? 'selected' : ''}>Years</option>
-                                            </select>
+                                <ul class="nav nav-tabs mb-3" id="programFormTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="program-info-tab" data-bs-toggle="tab" data-bs-target="#program-info" type="button" role="tab" aria-controls="program-info" aria-selected="true">Program Info</button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="program-subjects-tab" data-bs-toggle="tab" data-bs-target="#program-subjects" type="button" role="tab" aria-controls="program-subjects" aria-selected="false">Subjects</button>
+                                    </li>
+                                </ul>
+                                <div class="tab-content">
+                                    <!-- Program Info Tab -->
+                                    <div class="tab-pane fade show active" id="program-info" role="tabpanel" aria-labelledby="program-info-tab">
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="programName" class="form-label">Program Name <span class="text-danger">*</span></label>
+                                                <input type="text" class="form-control" id="programName" 
+                                                       value="${program?.name || ''}" required>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label for="programCode" class="form-label">Program Code <span class="text-danger">*</span></label>
+                                                <input type="text" class="form-control" id="programCode" 
+                                                       value="${program?.code || ''}" required>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="programLevel" class="form-label">Level <span class="text-danger">*</span></label>
+                                                <select class="form-select" id="programLevel" required>
+                                                    <option value="">Select Level</option>
+                                                    <option value="Foundation" ${program?.level === 'Foundation' ? 'selected' : ''}>Foundation</option>
+                                                    <option value="Diploma" ${program?.level === 'Diploma' ? 'selected' : ''}>Diploma</option>
+                                                    <option value="Degree" ${program?.level === 'Degree' ? 'selected' : ''}>Degree</option>
+                                                    <option value="Masters" ${program?.level === 'Masters' ? 'selected' : ''}>Masters</option>
+                                                    <option value="PhD" ${program?.level === 'PhD' ? 'selected' : ''}>PhD</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label for="programDepartment" class="form-label">Department <span class="text-danger">*</span></label>
+                                                <select class="form-select" id="programDepartment" required>
+                                                    <option value="">Select Department</option>
+                                                    <option value="Computing" ${program?.department === 'Computing' ? 'selected' : ''}>Computing</option>
+                                                    <option value="Business" ${program?.department === 'Business' ? 'selected' : ''}>Business</option>
+                                                    <option value="Engineering" ${program?.department === 'Engineering' ? 'selected' : ''}>Engineering</option>
+                                                    <option value="Computer Science" ${program?.department === 'Computer Science' ? 'selected' : ''}>Computer Science</option>
+                                                    <option value="Arts" ${program?.department === 'Arts' ? 'selected' : ''}>Arts</option>
+                                                    <option value="__custom__" ${program && ['Computing','Business','Engineering','Computer Science','Arts'].indexOf(program.department) === -1 ? 'selected' : ''}>Other / Custom</option>
+                                                </select>
+                                                <input type="text" class="form-control mt-2" id="programDepartmentCustom" placeholder="Enter department (for Other / Custom)" value="${program && ['Computing','Business','Engineering','Computer Science','Arts'].indexOf(program.department) === -1 ? (program.department || '') : ''}">
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="programDuration" class="form-label">Duration <span class="text-danger">*</span></label>
+                                                <div class="input-group">
+                                                    <input type="number" class="form-control" id="programDuration" 
+                                                           value="${program?.duration?.split(' ')[0] || ''}" step="0.5" min="0" required>
+                                                    <select class="form-select" id="programDurationUnit" style="max-width: 100px;">
+                                                        <option value="months" ${program?.duration?.includes('month') ? 'selected' : ''}>Months</option>
+                                                        <option value="years" ${!program?.duration || program?.duration?.includes('year') ? 'selected' : ''}>Years</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label for="programFee" class="form-label">Total Fee (RM) <span class="text-danger">*</span></label>
+                                                <input type="number" class="form-control" id="programFee" 
+                                                       value="${program?.fee || ''}" required>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="programDescription" class="form-label">Description</label>
+                                            <textarea class="form-control" id="programDescription" rows="3">${program?.description || ''}</textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="programStatus" 
+                                                       ${!program || program.status === 'Active' ? 'checked' : ''}>
+                                                <label class="form-check-label" for="programStatus">Active Program</label>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="programFee" class="form-label">Total Fee (RM) <span class="text-danger">*</span></label>
-                                        <input type="number" class="form-control" id="programFee" 
-                                               value="${program?.fee || ''}" required>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="programDescription" class="form-label">Description</label>
-                                    <textarea class="form-control" id="programDescription" rows="3">${program?.description || ''}</textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="programCourses" class="form-label">Courses</label>
-                                    <select class="form-select" id="programCourses" multiple>
-                                        ${coursesOptions}
-                                    </select>
-                                    <div class="form-text">Hold Ctrl/Cmd to select multiple courses</div>
-                                </div>
-                                <div class="mb-3">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" id="programStatus" 
-                                               ${!program || program.status === 'Active' ? 'checked' : ''}>
-                                        <label class="form-check-label" for="programStatus">Active Program</label>
+
+                                    <!-- Subjects Tab -->
+                                    <div class="tab-pane fade" id="program-subjects" role="tabpanel" aria-labelledby="program-subjects-tab">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="mb-0">Subjects under this program</h6>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" id="addSubjectRowBtn">
+                                                <i class="fas fa-plus me-1"></i> Add Subject
+                                            </button>
+                                        </div>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm align-middle">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width: 20%;">Code</th>
+                                                        <th style="width: 45%;">Name</th>
+                                                        <th style="width: 20%;">Credits</th>
+                                                        <th style="width: 5%;"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="programSubjectsBody">
+                                                    ${subjectsRowsHTML || ''}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div class="form-text">Leave a row empty to ignore it. Only rows with a Code and Name will be saved.</div>
                                     </div>
                                 </div>
                             </div>
@@ -310,15 +371,34 @@ const ProgramsPage = (function() {
         const modal = new bootstrap.Modal(document.getElementById('programFormModal'));
         modal.show();
         
-        // Initialize select2 for better dropdowns (if available)
-        if (typeof $ !== 'undefined' && $.fn.select2) {
-            $('#programCourses').select2({
-                placeholder: 'Select courses',
-                width: '100%',
-                dropdownParent: $('#programFormModal')
-            });
-        }
-        
+        // Add subject row handler
+        const subjectsBody = document.getElementById('programSubjectsBody');
+        const addSubjectRow = () => {
+            const row = document.createElement('tr');
+            row.className = 'subject-row';
+            row.innerHTML = `
+                <td><input type="text" class="form-control subject-code" placeholder="e.g., A1506"></td>
+                <td><input type="text" class="form-control subject-name" placeholder="Subject name"></td>
+                <td><input type="number" class="form-control subject-credits" min="0" step="1"></td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-subject-row">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            subjectsBody.appendChild(row);
+        };
+
+        document.getElementById('addSubjectRowBtn')?.addEventListener('click', addSubjectRow);
+
+        subjectsBody?.addEventListener('click', (e) => {
+            if (e.target.closest('.remove-subject-row')) {
+                e.preventDefault();
+                const row = e.target.closest('tr');
+                if (row) row.remove();
+            }
+        });
+
         // Handle form submission
         document.getElementById('programForm')?.addEventListener('submit', function(e) {
             e.preventDefault();
@@ -332,21 +412,54 @@ const ProgramsPage = (function() {
     }
     
     // Save program data
-    function saveProgram(programId = null) {
+    async function saveProgram(programId = null) {
+        const useFirebase = !!window.FirebaseAPI?.saveProgramRecord;
         const programs = JSON.parse(localStorage.getItem('programs') || '[]');
         const isEdit = !!programId;
         
         // Get form data
+        const id = programId || 'PROG' + Math.floor(1000 + Math.random() * 9000);
+
+        // Collect subjects from the Subjects tab table
+        const subjectRows = Array.from(document.querySelectorAll('#programSubjectsBody .subject-row'));
+        const subjects = subjectRows
+            .map((row, idx) => {
+                const code = row.querySelector('.subject-code')?.value.trim() || '';
+                const name = row.querySelector('.subject-name')?.value.trim() || '';
+                const creditsVal = row.querySelector('.subject-credits')?.value || '';
+                const credits = creditsVal === '' ? null : Number(creditsVal);
+                if (!code && !name && credits === null) return null; // entirely empty row
+                if (!code || !name) return null; // require at least code and name
+                return {
+                    id: `C${Date.now()}${idx}`,
+                    code,
+                    name,
+                    credits: Number.isFinite(credits) ? credits : null
+                };
+            })
+            .filter(Boolean);
+
+        // Resolve department (built-in option or custom)
+        const deptSelectEl = document.getElementById('programDepartment');
+        const deptCustomEl = document.getElementById('programDepartmentCustom');
+        const resolvedDepartment = deptSelectEl?.value === '__custom__'
+            ? (deptCustomEl?.value.trim() || '')
+            : (deptSelectEl?.value || '');
+
         const programData = {
-            id: programId || 'PROG' + Math.floor(1000 + Math.random() * 9000),
+            id,
             name: document.getElementById('programName').value,
             code: document.getElementById('programCode').value,
             level: document.getElementById('programLevel').value,
-            department: document.getElementById('programDepartment').value,
+            department: resolvedDepartment,
             duration: `${document.getElementById('programDuration').value} ${document.getElementById('programDurationUnit').value}`,
             fee: parseFloat(document.getElementById('programFee').value) || 0,
             description: document.getElementById('programDescription').value,
-            courses: Array.from(document.getElementById('programCourses').selectedOptions).map(opt => opt.value),
+            courses: subjects.map(s => ({
+                ...s,
+                level: document.getElementById('programLevel').value,
+                department: resolvedDepartment
+            })),
             status: document.getElementById('programStatus').checked ? 'Active' : 'Inactive',
             createdAt: isEdit ? programs.find(p => p.id === programId)?.createdAt : new Date().toISOString(),
             updatedAt: new Date().toISOString()
@@ -357,20 +470,28 @@ const ProgramsPage = (function() {
             showAlert('Please fill in all required fields', 'danger');
             return;
         }
-        
-        // Save to localStorage
-        if (isEdit) {
-            // Update existing program
-            const index = programs.findIndex(p => p.id === programId);
-            if (index !== -1) {
-                programs[index] = { ...programs[index], ...programData };
+
+        try {
+            if (useFirebase) {
+                // Save to Firebase under /programs/{id}
+                const { id: _id, ...payload } = programData;
+                await window.FirebaseAPI.saveProgramRecord(id, payload);
+            } else {
+                // Save to localStorage
+                if (isEdit) {
+                    const index = programs.findIndex(p => p.id === programId);
+                    if (index !== -1) {
+                        programs[index] = { ...programs[index], ...programData };
+                    }
+                } else {
+                    programs.push(programData);
+                }
+                localStorage.setItem('programs', JSON.stringify(programs));
             }
-        } else {
-            // Add new program
-            programs.push(programData);
+        } catch (err) {
+            showAlert('Failed to save program: ' + (err?.message || err), 'danger');
+            return;
         }
-        
-        localStorage.setItem('programs', JSON.stringify(programs));
         
         // Close the modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('programFormModal'));
@@ -434,25 +555,22 @@ const ProgramsPage = (function() {
             showAlert('Program not found', 'danger');
             return;
         }
-        
-        // Get courses details
-        const allCourses = JSON.parse(localStorage.getItem('courses') || '[]');
-        const programCourses = allCourses.filter(course => program.courses?.includes(course.code));
-        
-        // Format courses list
-        const coursesList = programCourses.length > 0 
+
+        // Courses for this program (subjects nested under program)
+        const programCourses = Array.isArray(program.courses) ? program.courses : [];
+
+        const coursesList = programCourses.length > 0
             ? programCourses.map(course => `
                 <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
                     <div>
                         <h6 class="mb-0">${course.code} - ${course.name}</h6>
-                        <small class="text-muted">${course.department} • ${course.credits} Credits</small>
+                        <small class="text-muted">${course.department || 'N/A'} &middot; Credits: ${course.credits != null ? course.credits : '-'}</small>
                     </div>
-                    <span class="badge bg-light text-dark">${course.level}</span>
+                    <span class="badge bg-light text-dark">${course.level || 'N/A'}</span>
                 </div>
             `).join('')
             : '<div class="text-muted">No courses assigned to this program.</div>';
-        
-        // Create modal HTML
+
         const modalHTML = `
             <div class="modal fade" id="programDetailsModal" tabindex="-1" aria-labelledby="programDetailsModalLabel" aria-hidden="true">
                 <div class="modal-dialog modal-lg">
