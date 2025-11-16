@@ -258,18 +258,18 @@ const ProgramsPage = (function() {
                                             <div class="col-md-6 mb-3">
                                                 <label for="programName" class="form-label">Program Name <span class="text-danger">*</span></label>
                                                 <input type="text" class="form-control" id="programName" 
-                                                       value="${program?.name || ''}" required>
+                                                       value="${program?.name || ''}">
                                             </div>
                                             <div class="col-md-6 mb-3">
                                                 <label for="programCode" class="form-label">Program Code <span class="text-danger">*</span></label>
                                                 <input type="text" class="form-control" id="programCode" 
-                                                       value="${program?.code || ''}" required>
+                                                       value="${program?.code || ''}" >
                                             </div>
                                         </div>
                                         <div class="row">
                                             <div class="col-md-6 mb-3">
                                                 <label for="programLevel" class="form-label">Level <span class="text-danger">*</span></label>
-                                                <select class="form-select" id="programLevel" required>
+                                                <select class="form-select" id="programLevel">
                                                     <option value="">Select Level</option>
                                                     <option value="Foundation" ${program?.level === 'Foundation' ? 'selected' : ''}>Foundation</option>
                                                     <option value="Diploma" ${program?.level === 'Diploma' ? 'selected' : ''}>Diploma</option>
@@ -280,7 +280,7 @@ const ProgramsPage = (function() {
                                             </div>
                                             <div class="col-md-6 mb-3">
                                                 <label for="programDepartment" class="form-label">Department <span class="text-danger">*</span></label>
-                                                <select class="form-select" id="programDepartment" required>
+                                                <select class="form-select" id="programDepartment" >
                                                     <option value="">Select Department</option>
                                                     <option value="Computing" ${program?.department === 'Computing' ? 'selected' : ''}>Computing</option>
                                                     <option value="Business" ${program?.department === 'Business' ? 'selected' : ''}>Business</option>
@@ -289,7 +289,7 @@ const ProgramsPage = (function() {
                                                     <option value="Arts" ${program?.department === 'Arts' ? 'selected' : ''}>Arts</option>
                                                     <option value="__custom__" ${program && ['Computing','Business','Engineering','Computer Science','Arts'].indexOf(program.department) === -1 ? 'selected' : ''}>Other / Custom</option>
                                                 </select>
-                                                <input type="text" class="form-control mt-2" id="programDepartmentCustom" placeholder="Enter department (for Other / Custom)" value="${program && ['Computing','Business','Engineering','Computer Science','Arts'].indexOf(program.department) === -1 ? (program.department || '') : ''}">
+                                                <input type="text" class="form-control mt-2" id="programDepartmentCustom" placeholder="Enter department (for Other / Custom)" value="${program && ['Computing','Business','Engineering','Computer Science','Arts'].indexOf(program.department) === -1 ? (program.department || '') : ''}" style="display: none;">
                                             </div>
                                         </div>
                                         <div class="row">
@@ -297,7 +297,7 @@ const ProgramsPage = (function() {
                                                 <label for="programDuration" class="form-label">Duration <span class="text-danger">*</span></label>
                                                 <div class="input-group">
                                                     <input type="number" class="form-control" id="programDuration" 
-                                                           value="${program?.duration?.split(' ')[0] || ''}" step="0.5" min="0" required>
+                                                           value="${program?.duration?.split(' ')[0] || ''}" step="0.5" min="0" >
                                                     <select class="form-select" id="programDurationUnit" style="max-width: 100px;">
                                                         <option value="months" ${program?.duration?.includes('month') ? 'selected' : ''}>Months</option>
                                                         <option value="years" ${!program?.duration || program?.duration?.includes('year') ? 'selected' : ''}>Years</option>
@@ -307,7 +307,7 @@ const ProgramsPage = (function() {
                                             <div class="col-md-6 mb-3">
                                                 <label for="programFee" class="form-label">Total Fee (RM) <span class="text-danger">*</span></label>
                                                 <input type="number" class="form-control" id="programFee" 
-                                                       value="${program?.fee || ''}" required>
+                                                       value="${program?.fee || ''}" >
                                             </div>
                                         </div>
                                         <div class="mb-3">
@@ -398,17 +398,130 @@ const ProgramsPage = (function() {
                 if (row) row.remove();
             }
         });
+        
+        // Show/hide custom department field
+        const deptSelect = document.getElementById('programDepartment');
+        const deptCustom = document.getElementById('programDepartmentCustom');
+        
+        function toggleCustomDepartment() {
+            if (deptSelect.value === '__custom__') {
+                deptCustom.style.display = 'block';
+                //deptCustom.required = true;
+            } else {
+                deptCustom.style.display = 'none';
+                //deptCustom.required = false;
+                deptCustom.value = '';
+            }
+        }
+        
+        // Initial state
+        toggleCustomDepartment();
+        
+        deptSelect?.addEventListener('change', toggleCustomDepartment);
 
         // Handle form submission
         document.getElementById('programForm')?.addEventListener('submit', function(e) {
             e.preventDefault();
-            saveProgram(program?.id);
+            
+            // Validate form before saving
+            if (validateProgramForm()) {
+                saveProgram(program?.id);
+            }
         });
         
         // Remove modal from DOM when hidden
         document.getElementById('programFormModal').addEventListener('hidden.bs.modal', function() {
             this.remove();
         });
+    }
+    
+    // Validate program form
+    function validateProgramForm() {
+        let isValid = true;
+        const errors = [];
+
+        // Remove existing error messages and styling
+        document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        document.querySelectorAll('.invalid-feedback').forEach(el => el.remove());
+
+        // Helper function to show field error
+        function showFieldError(fieldId, message) {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.classList.add('is-invalid');
+                // Remove any previous feedback for this field
+                if (field.nextSibling && field.nextSibling.classList && field.nextSibling.classList.contains('invalid-feedback')) {
+                    field.nextSibling.remove();
+                }
+                // Create and insert error message after the field
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'invalid-feedback';
+                errorDiv.textContent = message;
+                field.after(errorDiv);
+            }
+            errors.push({ fieldId, message });
+            isValid = false;
+        }
+
+        // Validate Program Name
+        const programName = document.getElementById('programName').value.trim();
+        if (!programName) {
+            showFieldError('programName', 'Program name is required.');
+        }
+
+        // Validate Program Code
+        const programCode = document.getElementById('programCode').value.trim();
+        if (!programCode) {
+            showFieldError('programCode', 'Program code is required.');
+        }
+
+        // Validate Level
+        const programLevel = document.getElementById('programLevel').value;
+        if (!programLevel) {
+            showFieldError('programLevel', 'Level is required.');
+        }
+
+        // Validate Department
+        const programDepartment = document.getElementById('programDepartment').value;
+        if (!programDepartment) {
+            showFieldError('programDepartment', 'Department is required.');
+        } else if (programDepartment === '__custom__') {
+            const customDept = document.getElementById('programDepartmentCustom').value.trim();
+            if (!customDept) {
+                showFieldError('programDepartmentCustom', 'Custom department name is required.');
+            }
+        }
+
+        // Validate Duration
+        const programDuration = document.getElementById('programDuration').value.trim();
+        if (!programDuration) {
+            showFieldError('programDuration', 'Duration is required.');
+        } else if (parseFloat(programDuration) <= 0) {
+            showFieldError('programDuration', 'Duration must be greater than 0.');
+        }
+
+        // Validate Fee
+        const programFee = document.getElementById('programFee').value.trim();
+        if (!programFee) {
+            showFieldError('programFee', 'Total fee is required.');
+        } else if (parseFloat(programFee) < 0) {
+            showFieldError('programFee', 'Fee cannot be negative.');
+        }
+
+        // Show summary alert if there are errors
+        if (!isValid) {
+            // Show all error messages in a list
+            const errorList = errors.map(e => `<li>${e.message}</li>`).join('');
+            showAlert(`<strong>Please fix the following errors:</strong><ul class="mb-0">${errorList}</ul>`, 'danger');
+
+            // Switch to the Program Info tab if errors exist there
+            const programInfoTab = document.getElementById('program-info-tab');
+            if (programInfoTab && errors.length > 0) {
+                programInfoTab.click();
+            }
+        }
+
+        return isValid;
     }
     
     // Save program data
@@ -465,12 +578,6 @@ const ProgramsPage = (function() {
             updatedAt: new Date().toISOString()
         };
         
-        // Validate required fields
-        if (!programData.name || !programData.code || !programData.level || !programData.department) {
-            showAlert('Please fill in all required fields', 'danger');
-            return;
-        }
-
         try {
             if (useFirebase) {
                 // Save to Firebase under /programs/{id}
@@ -509,41 +616,68 @@ const ProgramsPage = (function() {
     }
     
     // Delete program
-    function deleteProgram(programId) {
+    async function deleteProgram(programId) {
+        if (!programId) {
+            showAlert('Invalid program ID', 'danger');
+            return;
+        }
+
         if (!confirm('Are you sure you want to delete this program? This action cannot be undone.')) {
             return;
         }
-        
-        const programs = JSON.parse(localStorage.getItem('programs') || '[]');
-        const programToDelete = programs.find(p => p.id === programId);
-        
-        if (!programToDelete) {
-            showAlert('Program not found', 'danger');
-            return;
+
+        const useFirebase = !!window.FirebaseAPI?.deleteProgramRecord;
+
+        try {
+            if (useFirebase) {
+                // Check if any students are enrolled in this program (Firebase)
+                let enrolledStudents = [];
+                if (window.FirebaseAPI?.listStudents) {
+                    const students = await window.FirebaseAPI.listStudents();
+                    enrolledStudents = students.filter(s => s.programId === programId);
+                }
+                if (enrolledStudents.length > 0) {
+                    showAlert(`Cannot delete program. ${enrolledStudents.length} student(s) are enrolled in this program.`, 'danger');
+                    return;
+                }
+
+                // Delete from Firebase
+                await window.FirebaseAPI.deleteProgramRecord(programId);
+            } else {
+                // LocalStorage fallback
+                const programs = JSON.parse(localStorage.getItem('programs') || '[]');
+                const programToDelete = programs.find(p => p.id === programId);
+
+                if (!programToDelete) {
+                    showAlert('Program not found', 'danger');
+                    return;
+                }
+
+                const students = JSON.parse(localStorage.getItem('students') || '[]');
+                const enrolledStudents = students.filter(s => s.programId === programId);
+
+                if (enrolledStudents.length > 0) {
+                    showAlert(`Cannot delete program. ${enrolledStudents.length} student(s) are enrolled in this program.`, 'danger');
+                    return;
+                }
+
+                const updatedPrograms = programs.filter(p => p.id !== programId);
+                localStorage.setItem('programs', JSON.stringify(updatedPrograms));
+            }
+
+            // Reload the programs list
+            loadPrograms();
+
+            // Show success message
+            showAlert('Program deleted successfully', 'success');
+
+            // Log the activity
+            const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+            App.logActivity(`Deleted program: ${programId}`, currentUser.email);
+
+        } catch (err) {
+            showAlert('Failed to delete program: ' + (err?.message || err), 'danger');
         }
-        
-        // Check if any students are enrolled in this program
-        const students = JSON.parse(localStorage.getItem('students') || '[]');
-        const enrolledStudents = students.filter(s => s.programId === programId);
-        
-        if (enrolledStudents.length > 0) {
-            showAlert(`Cannot delete program. ${enrolledStudents.length} student(s) are enrolled in this program.`, 'danger');
-            return;
-        }
-        
-        // Remove program from the array
-        const updatedPrograms = programs.filter(p => p.id !== programId);
-        localStorage.setItem('programs', JSON.stringify(updatedPrograms));
-        
-        // Reload the programs list
-        loadPrograms();
-        
-        // Show success message
-        showAlert('Program deleted successfully', 'success');
-        
-        // Log the activity
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        App.logActivity(`Deleted program: ${programToDelete.name} (${programId})`, currentUser.email);
     }
     
     // View program details
