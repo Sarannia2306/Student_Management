@@ -2,22 +2,6 @@
 const App = (function() {
     // Private variables
     let currentUser = null;
-    
-    // Mock data
-    const mockData = {
-        students: JSON.parse(localStorage.getItem('students')) || [],
-        programs: JSON.parse(localStorage.getItem('programs')) || [
-            { id: 1, name: 'Diploma in Information Technology', code: 'DIT', duration: '2 years' },
-            { id: 2, name: 'Bachelor of Business Administration', code: 'BBA', duration: '3 years' },
-            { id: 3, name: 'Bachelor of Computer Science', code: 'BCS', duration: '4 years' }
-        ],
-        users: JSON.parse(localStorage.getItem('users')) || [
-            { id: 1, email: 'admin@example.com', password: 'admin123', firstName: 'Admin', lastName: 'User', role: 'admin' },
-            { id: 2, email: 'student@example.com', password: 'student123', firstName: 'John', lastName: 'Doe', role: 'student' }
-        ],
-        attendance: JSON.parse(localStorage.getItem('attendance')) || [],
-        logs: JSON.parse(localStorage.getItem('logs')) || []
-    };
 
     // Initialize the application
     function init() {

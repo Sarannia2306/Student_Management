@@ -233,7 +233,7 @@ const Auth = (function() {
         if (formData.password !== formData.confirmPassword){ showAlert('Passwords do not match', 'danger'); document.getElementById('confirmStudentPassword').focus(); return; }
         try {
             if (window.FirebaseAPI?.registerUser) {
-                // Hash IC (no pre-auth DB reads). We'll enforce uniqueness by index write after registration.
+                // Hash IC
                 const icHash = await window.FirebaseAPI.sha256Hex(formData.icNumber);
                 const created = await window.FirebaseAPI.registerUser(formData.email, formData.password, 'student', {
                     studentId: studentId,
@@ -242,7 +242,7 @@ const Auth = (function() {
                     icHash: icHash,
                     maskedIC: maskIC(formData.icNumber)
                 });
-                // Create IC uniqueness index (fails if duplicate); show clear error and sign out if it fails
+                // Create IC uniqueness index 
                 try {
                     await window.FirebaseAPI.setIcIndex(icHash, created.uid);
                 } catch (e) {
@@ -252,7 +252,7 @@ const Auth = (function() {
                 }
                 // Email verification already sent by Firebase on registration
                 localStorage.setItem('pendingVerification', JSON.stringify({ uid: created.uid, email: formData.email, role: 'student' }));
-                // Close register modal and route to Verify page, do not show login modal
+                // Close register modal and route to Verify page
                 const regEl = document.getElementById('registerModal');
                 if (regEl) { try { (bootstrap.Modal.getInstance(regEl) || new bootstrap.Modal(regEl)).hide(); } catch(_){} }
                 if (typeof App !== 'undefined') App.loadPage('verify');

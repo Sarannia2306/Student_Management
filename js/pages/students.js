@@ -605,6 +605,100 @@ const StudentsPage = (function() {
             showAlert('Student not found', 'danger');
             return;
         }
+
+        // Load enrolments from Firebase /students/{uid}/enrolments or localStorage fallback
+        let enrolments = [];
+        const uid = student.uid || student.id;
+        if (uid && window.FirebaseAPI?.getStudentEnrolments) {
+            try {
+                const fromDb = await window.FirebaseAPI.getStudentEnrolments(uid);
+                if (Array.isArray(fromDb)) enrolments = fromDb;
+            } catch (_) {}
+        }
+        if (!Array.isArray(enrolments) || enrolments.length === 0) {
+            const studentsLS = JSON.parse(localStorage.getItem('students') || '[]');
+            const st = studentsLS.find(s => (s.uid && s.uid === uid) || s.id === uid);
+            if (st && Array.isArray(st.enrolments)) enrolments = st.enrolments;
+        }
+
+        // Group enrolments by semester and compute totals
+        let enrolmentsSection = '<p class="text-muted">No subject enrolments recorded for this student.</p>';
+        if (Array.isArray(enrolments) && enrolments.length > 0) {
+            const bySemester = {};
+            enrolments.forEach(e => {
+                const sem = e.semester || 'Semester';
+                if (!bySemester[sem]) bySemester[sem] = [];
+                bySemester[sem].push(e);
+            });
+
+            enrolmentsSection = `
+                <div class="card mb-4">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Subject Enrolments</h5>
+                        <small class="text-muted">Admin can update status, add or remove subjects for this student.</small>
+                    </div>
+                    <div class="card-body">
+                        ${Object.keys(bySemester).sort().map(sem => {
+                            const list = bySemester[sem];
+                            const totalCredits = list.reduce((sum, e) => sum + (Number(e.credits) || 0), 0);
+                            return `
+                                <div class="mb-4">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0">${sem}</h6>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge bg-primary">Total Credits: ${totalCredits}</span>
+                                            <button type="button" class="btn btn-sm btn-outline-primary add-enrolment-btn" data-semester="${sem}">
+                                                <i class="fas fa-plus me-1"></i>Add Subject
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm align-middle mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th style="width: 18%;">Code</th>
+                                                    <th>Subject Name</th>
+                                                    <th style="width: 12%;">Credits</th>
+                                                    <th style="width: 18%;">Status</th>
+                                                    <th style="width: 6%;"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="enrolment-tbody" data-semester="${sem}">
+                                                ${list.map(e => `
+                                                    <tr class="enrolment-row" data-course-id="${e.courseId || ''}">
+                                                        <td><input type="text" class="form-control form-control-sm border-0 bg-transparent px-1 enrol-code" value="${e.code || ''}" placeholder="Code"></td>
+                                                        <td><input type="text" class="form-control form-control-sm border-0 bg-transparent px-1 enrol-name" value="${e.name || ''}" placeholder="Subject name"></td>
+                                                        <td><input type="number" class="form-control form-control-sm border-0 bg-transparent px-1 enrol-credits" value="${e.credits != null ? e.credits : ''}" min="0" step="0.5" placeholder="0"></td>
+                                                        <td>
+                                                            <select class="form-select form-select-sm enrol-status">
+                                                                <option value="enrolled" ${(e.status || 'enrolled') === 'enrolled' ? 'selected' : ''}>Enrolled</option>
+                                                                <option value="completed" ${e.status === 'completed' ? 'selected' : ''}>Completed</option>
+                                                                <option value="dropped" ${e.status === 'dropped' ? 'selected' : ''}>Dropped</option>
+                                                            </select>
+                                                        </td>
+                                                        <td class="text-center">
+                                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 remove-enrolment-row" title="Remove subject">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div class="card-footer d-flex justify-content-between align-items-center">
+                        <small class="text-muted">Changes here only affect this student's enrolment records.</small>
+                        <button type="button" class="btn btn-primary" id="saveEnrolmentsAdminBtn">
+                            <i class="fas fa-save me-1"></i>Save Enrolments
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
         
         // Format guardian info
         const guardianInfo = student.guardian ? `
@@ -631,7 +725,7 @@ const StudentsPage = (function() {
         
         // Create modal HTML
         const modalHTML = `
-            <div class="modal fade" id="studentDetailsModal" tabindex="-1" aria-labelledby="studentDetailsModalLabel" aria-hidden="true">
+            <div class="modal fade" id="studentDetailsModal" tabindex="-1" aria-labelledby="studentDetailsModalLabel" aria-hidden="true" data-student-uid="${student.uid || student.id}" data-program-name="${student.course || ''}">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -678,27 +772,29 @@ const StudentsPage = (function() {
                                             </div>
                                         </div>
                                     </div>
-                                    
-                                    <div class="card mb-3">
-                                        <div class="card-header bg-light">
-                                            <h5 class="mb-0">Academic Information</h5>
+                                </div>
+                            </div>
+
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h5 class="mb-0">Academic Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <p class="mb-1"><strong>Course:</strong> ${student.course || 'N/A'}</p>
+                                            <p class="mb-1"><strong>Level:</strong> ${student.academicLevel || 'N/A'}</p>
                                         </div>
-                                        <div class="card-body">
-                                            <div class="row">
-                                                <div class="col-md-6">
-                                                    <p class="mb-1"><strong>Course:</strong> ${student.course || 'N/A'}</p>
-                                                    <p class="mb-1"><strong>Level:</strong> ${student.academicLevel || 'N/A'}</p>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <p class="mb-1"><strong>Semester:</strong> ${student.semester || 'N/A'}</p>
-                                                    <p class="mb-1"><strong>Status:</strong> ${student.status || 'Active'}</p>
-                                                </div>
-                                            </div>
+                                        <div class="col-md-6">
+                                            <p class="mb-1"><strong>Semester:</strong> ${student.semester || 'N/A'}</p>
+                                            <p class="mb-1"><strong>Status:</strong> ${student.status || 'Active'}</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
+
+                            ${enrolmentsSection}
+
                             ${guardianInfo}
                         </div>
                         <div class="modal-footer">
@@ -718,11 +814,99 @@ const StudentsPage = (function() {
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         
         // Initialize the modal
-        const modal = new bootstrap.Modal(document.getElementById('studentDetailsModal'));
+        const modalRoot = document.getElementById('studentDetailsModal');
+        const modal = new bootstrap.Modal(modalRoot);
         modal.show();
         
+        // Wire up admin enrolment management inside this modal
+        const saveBtn = modalRoot.querySelector('#saveEnrolmentsAdminBtn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async () => {
+                const uidTarget = modalRoot.getAttribute('data-student-uid');
+                if (!uidTarget) return;
+                const updatedEnrolments = [];
+                const defaultProgramName = modalRoot.getAttribute('data-program-name') || '';
+                modalRoot.querySelectorAll('.enrolment-tbody').forEach(tbody => {
+                    const sem = tbody.getAttribute('data-semester') || 'Semester';
+                    tbody.querySelectorAll('.enrolment-row').forEach(row => {
+                        const code = row.querySelector('.enrol-code')?.value.trim() || '';
+                        const name = row.querySelector('.enrol-name')?.value.trim() || '';
+                        const creditsVal = row.querySelector('.enrol-credits')?.value || '';
+                        const credits = creditsVal === '' ? null : Number(creditsVal);
+                        const programName = defaultProgramName;
+                        const status = row.querySelector('.enrol-status')?.value || 'enrolled';
+                        if (!code && !name) return; // skip empty rows
+                        updatedEnrolments.push({
+                            courseId: row.getAttribute('data-course-id') || '',
+                            code,
+                            name,
+                            credits,
+                            programName,
+                            semester: sem,
+                            status
+                        });
+                    });
+                });
+
+                try {
+                    if (window.FirebaseAPI?.saveStudentEnrolments) {
+                        await window.FirebaseAPI.saveStudentEnrolments(uidTarget, updatedEnrolments);
+                    } else {
+                        const studentsLS = JSON.parse(localStorage.getItem('students') || '[]');
+                        const idx = studentsLS.findIndex(s => (s.uid && s.uid === uidTarget) || s.id === uidTarget);
+                        if (idx !== -1) {
+                            studentsLS[idx].enrolments = updatedEnrolments;
+                            localStorage.setItem('students', JSON.stringify(studentsLS));
+                        }
+                    }
+                    showAlert('Subject enrolments updated successfully.', 'success');
+                } catch (e) {
+                    console.error('Failed to update enrolments from admin side', e);
+                    showAlert('Failed to update enrolments. Please try again later.', 'danger');
+                }
+            });
+        }
+
+        // Handle remove and add buttons within this modal
+        modalRoot.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('.remove-enrolment-row');
+            if (removeBtn) {
+                e.preventDefault();
+                const row = removeBtn.closest('.enrolment-row');
+                if (row) row.remove();
+                return;
+            }
+            const addBtn = e.target.closest('.add-enrolment-btn');
+            if (addBtn) {
+                e.preventDefault();
+                const sem = addBtn.getAttribute('data-semester') || 'Semester';
+                const tbody = modalRoot.querySelector(`.enrolment-tbody[data-semester="${sem}"]`);
+                if (!tbody) return;
+                const tr = document.createElement('tr');
+                tr.className = 'enrolment-row';
+                tr.innerHTML = `
+                    <td><input type="text" class="form-control form-control-sm border-0 bg-transparent px-1 enrol-code" value="" placeholder="Code"></td>
+                    <td><input type="text" class="form-control form-control-sm border-0 bg-transparent px-1 enrol-name" value="" placeholder="Subject name"></td>
+                    <td><input type="number" class="form-control form-control-sm border-0 bg-transparent px-1 enrol-credits" value="" min="0" step="0.5" placeholder="0"></td>
+                    <td>
+                        <select class="form-select form-select-sm enrol-status">
+                            <option value="enrolled" selected>Enrolled</option>
+                            <option value="completed">Completed</option>
+                            <option value="dropped">Dropped</option>
+                        </select>
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-enrolment-row" title="Remove subject">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+        });
+
         // Remove modal from DOM when hidden
-        document.getElementById('studentDetailsModal').addEventListener('hidden.bs.modal', function() {
+        modalRoot.addEventListener('hidden.bs.modal', function() {
             this.remove();
         });
     }
