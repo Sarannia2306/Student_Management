@@ -1,18 +1,21 @@
 // Activity Logs Page Module
 const ActivityLogsPage = (function() {
     // Initialize the activity logs page
-    function init() {
-        loadActivityLogs();
+    async function init() {
+        await loadActivityLogs();
         setupEventListeners();
     }
 
-    // Load activity logs
-    function loadActivityLogs(searchTerm = '') {
-        // Get logs from localStorage or initialize with sample data if empty
-        let logs = JSON.parse(localStorage.getItem('activityLogs') || '[]');
-        
-        // Sort logs by timestamp (newest first)
-        logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Load activity logs from Firebase
+    async function loadActivityLogs(searchTerm = '') {
+        let logs = [];
+        try {
+            if (window.FirebaseAPI?.listLogs) {
+                logs = await window.FirebaseAPI.listLogs();
+            }
+        } catch (e) {
+            console.error('Failed to load activity logs from Firebase', e);
+        }
         
         // Filter logs if search term is provided
         let filteredLogs = [...logs];
@@ -164,8 +167,15 @@ const ActivityLogsPage = (function() {
     }
     
     // Show log details modal
-    function showLogDetails(logId) {
-        const logs = JSON.parse(localStorage.getItem('activityLogs') || '[]');
+    async function showLogDetails(logId) {
+        let logs = [];
+        try {
+            if (window.FirebaseAPI?.listLogs) {
+                logs = await window.FirebaseAPI.listLogs();
+            }
+        } catch (e) {
+            console.error('Failed to load activity logs for details view', e);
+        }
         const log = logs.find(l => l.id === logId);
         
         if (!log) {
@@ -350,27 +360,34 @@ const ActivityLogsPage = (function() {
         
         // Log the activity
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        App.logActivity('Exported activity logs', currentUser.email);
+        App.logActivity('Exported activity logs', currentUser.email, 'success');
     }
     
     // Clear all logs
-    function clearLogs() {
+    async function clearLogs() {
         if (!confirm('Are you sure you want to clear all activity logs? This action cannot be undone.')) {
             return;
         }
         
-        // Clear logs from localStorage
-        localStorage.setItem('activityLogs', JSON.stringify([]));
+        try {
+            if (window.FirebaseAPI?.clearAllLogs) {
+                await window.FirebaseAPI.clearAllLogs();
+            }
+        } catch (e) {
+            console.error('Failed to clear activity logs in Firebase', e);
+            showAlert('Failed to clear logs from the server', 'danger');
+            return;
+        }
         
         // Reload the logs
-        loadActivityLogs();
+        await loadActivityLogs();
         
         // Show success message
         showAlert('All activity logs have been cleared', 'success');
         
         // Log the activity
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        App.logActivity('Cleared all activity logs', currentUser.email);
+        App.logActivity('Cleared all activity logs', currentUser.email, 'warning');
     }
     
     // Get icon for log type

@@ -7,7 +7,8 @@ const AttendancePage = (function() {
         if (currentUser.role === 'admin') {
             loadAdminAttendance();
         } else {
-            loadStudentAttendance(currentUser.id);
+            const sid = currentUser.studentId || currentUser.id || currentUser.uid || '';
+            loadStudentAttendance(sid);
         }
         
         setupEventListeners();
@@ -32,11 +33,17 @@ const AttendancePage = (function() {
             const presentCount = records.filter(r => r.status === 'Present').length;
             const totalCount = records.length;
             const percentage = Math.round((presentCount / totalCount) * 100) || 0;
+
+            const uniqueNames = Array.from(new Set(records.map(r => r.studentName || r.studentId || 'Student')));
+            let namesDisplay = uniqueNames.join(', ');
+            if (uniqueNames.length > 3) {
+                namesDisplay = uniqueNames.slice(0, 3).join(', ') + ` +${uniqueNames.length - 3} more`;
+            }
             
             return `
                 <tr>
                     <td>${formatDate(date)}</td>
-                    <td>${totalCount}</td>
+                    <td>${namesDisplay}</td>
                     <td>${presentCount}</td>
                     <td>
                         <div class="progress" style="height: 20px;">
@@ -77,7 +84,7 @@ const AttendancePage = (function() {
                                 <thead class="table-light">
                                     <tr>
                                         <th>Date</th>
-                                        <th>Total Students</th>
+                                        <th>Student Names</th>
                                         <th>Present</th>
                                         <th>Attendance Rate</th>
                                         <th>Actions</th>
@@ -98,35 +105,56 @@ const AttendancePage = (function() {
     }
     
     // Load attendance data for student view
-    function loadStudentAttendance(studentId) {
-        const attendance = JSON.parse(localStorage.getItem('attendance') || '[]')
-            .filter(record => record.studentId === studentId)
-            .sort((a, b) => new Date(b.date) - new Date(a.date));
-        
+    async function loadStudentAttendance(studentId) {
+        let attendance = [];
+        try {
+            if (window.FirebaseAPI?.listAttendanceForStudent) {
+                attendance = await window.FirebaseAPI.listAttendanceForStudent(studentId);
+            } else {
+                attendance = JSON.parse(localStorage.getItem('attendance') || '[]')
+                    .filter(record => record.studentId === studentId);
+            }
+        } catch (e) {
+            console.error('Failed to load attendance for student portal', e);
+            attendance = JSON.parse(localStorage.getItem('attendance') || '[]')
+                .filter(record => record.studentId === studentId);
+        }
+
+        // Ensure newest first
+        attendance.sort((a, b) => new Date(b.date || b.markedAt || 0) - new Date(a.date || a.markedAt || 0));
+
         // Calculate attendance summary
         const totalDays = attendance.length;
         const presentDays = attendance.filter(r => r.status === 'Present').length;
-        const absentDays = totalDays - presentDays;
+        const lateDays = attendance.filter(r => r.status === 'Late').length;
+        const absentDays = totalDays - presentDays - lateDays;
         const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
         
         // Generate attendance rows
-        const attendanceRows = attendance.map(record => `
-            <tr>
-                <td>${formatDate(record.date)}</td>
-                <td>
-                    <span class="badge bg-${record.status === 'Present' ? 'success' : 'danger'}">
-                        ${record.status}
-                    </span>
-                </td>
-                <td>${record.remarks || '-'}</td>
-            </tr>
-        `).join('');
+        const attendanceRows = attendance.map(record => {
+            let badgeClass = 'secondary';
+            if (record.status === 'Present') badgeClass = 'success';
+            else if (record.status === 'Absent') badgeClass = 'danger';
+            else if (record.status === 'Late') badgeClass = 'warning';
+            return `
+                <tr>
+                    <td>${formatDate(record.date)}</td>
+                    <td>
+                        <span class="badge bg-${badgeClass}">
+                            ${record.status}
+                        </span>
+                    </td>
+                    <td>${record.subjectCode || ''}${record.subjectName ? ' - ' + record.subjectName : ''}</td>
+                    <td>${record.remarks || '-'}</td>
+                </tr>
+            `;
+        }).join('');
         
         // Set the HTML content for student
         document.getElementById('mainContent').innerHTML = `
             <div class="container-fluid py-4">
-                <div class="row mb-4">
-                    <div class="col-md-4">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
                         <div class="card bg-primary text-white">
                             <div class="card-body">
                                 <h5 class="card-title">Attendance Rate</h5>
@@ -137,7 +165,7 @@ const AttendancePage = (function() {
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-6 col-md-3">
                         <div class="card bg-success text-white">
                             <div class="card-body">
                                 <h5 class="card-title">Present</h5>
@@ -148,7 +176,18 @@ const AttendancePage = (function() {
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-6 col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">Late</h5>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h2 class="mb-0">${lateDays}</h2>
+                                    <i class="fas fa-user-clock fa-2x opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
                         <div class="card bg-danger text-white">
                             <div class="card-body">
                                 <h5 class="card-title">Absent</h5>
@@ -172,11 +211,12 @@ const AttendancePage = (function() {
                                     <tr>
                                         <th>Date</th>
                                         <th>Status</th>
+                                        <th>Subject</th>
                                         <th>Remarks</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${attendanceRows || '<tr><td colspan="3" class="text-center py-4">No attendance records found</td></tr>'}
+                                    ${attendanceRows || '<tr><td colspan="4" class="text-center py-4">No attendance records found</td></tr>'}
                                 </tbody>
                             </table>
                         </div>
@@ -186,29 +226,16 @@ const AttendancePage = (function() {
         `;
     }
     
-    // Show mark attendance modal
+    // Show mark attendance modal (admin)
     function showMarkAttendanceModal() {
-        const students = JSON.parse(localStorage.getItem('students') || '[]');
+        const programs = JSON.parse(localStorage.getItem('programs') || '[]');
         const today = new Date().toISOString().split('T')[0];
-        
-        // Generate student rows with Present/Absent selection
-        const studentRows = students.map(student => `
-            <div class="d-flex justify-content-between align-items-center border-bottom py-2">
-                <div>
-                    <strong>${student.fullName}</strong> <small class="text-muted">(${student.id})</small>
-                </div>
-                <div class="btn-group" role="group" aria-label="Status">
-                    <input type="radio" class="btn-check status-radio" name="status-${student.id}" id="present-${student.id}" value="Present" checked>
-                    <label class="btn btn-outline-success btn-sm" for="present-${student.id}">Present</label>
-                    <input type="radio" class="btn-check status-radio" name="status-${student.id}" id="absent-${student.id}" value="Absent">
-                    <label class="btn btn-outline-danger btn-sm" for="absent-${student.id}">Absent</label>
-                </div>
-            </div>
-        `).join('');
-        
+
+        const programOptions = programs.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
         const modalHTML = `
             <div class="modal fade" id="markAttendanceModal" tabindex="-1" aria-labelledby="markAttendanceModalLabel" aria-hidden="true">
-                <div class="modal-dialog">
+                <div class="modal-dialog modal-xl">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title" id="markAttendanceModalLabel">Mark Attendance</h5>
@@ -216,31 +243,66 @@ const AttendancePage = (function() {
                         </div>
                         <form id="markAttendanceForm">
                             <div class="modal-body">
-                                <div class="mb-3">
-                                    <label for="attendanceDate" class="form-label">Date</label>
-                                    <input type="date" class="form-control" id="attendanceDate" value="${today}" required>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <label class="form-label mb-0">Select Students & Status</label>
-                                        <div>
-                                            <button type="button" class="btn btn-sm btn-outline-success me-2" id="markAllPresentBtn">
-                                                <i class="fas fa-check me-1"></i> Mark All Present
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" id="markAllAbsentBtn">
-                                                <i class="fas fa-times me-1"></i> Mark All Absent
-                                            </button>
-                                        </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-3">
+                                        <label for="attendanceDate" class="form-label">Date</label>
+                                        <input type="date" class="form-control" id="attendanceDate" value="${today}" required>
                                     </div>
-                                    <div class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
-                                        ${studentRows || 'No students found'}
+                                    <div class="col-md-3">
+                                        <label for="attendanceProgram" class="form-label">Program</label>
+                                        <select id="attendanceProgram" class="form-select" required>
+                                            <option value="">Select Program</option>
+                                            ${programOptions}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="attendanceSemester" class="form-label">Semester</label>
+                                        <select id="attendanceSemester" class="form-select" required>
+                                            <option value="">Select Semester</option>
+                                            <option value="Semester 1">Semester 1</option>
+                                            <option value="Semester 2">Semester 2</option>
+                                            <option value="Semester 3">Semester 3</option>
+                                            <option value="Semester 4">Semester 4</option>
+                                            <option value="Semester 5">Semester 5</option>
+                                            <option value="Semester 6">Semester 6</option>
+                                            <option value="Semester 7">Semester 7</option>
+                                            <option value="Semester 8">Semester 8</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="attendanceSubject" class="form-label">Subject</label>
+                                        <select id="attendanceSubject" class="form-select" required>
+                                            <option value="">Select Subject</option>
+                                        </select>
                                     </div>
                                 </div>
-                                
-                                <div class="mb-3">
-                                    <label for="attendanceRemarks" class="form-label">Remarks (Optional)</label>
-                                    <textarea class="form-control" id="attendanceRemarks" rows="2"></textarea>
+
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0">Students</h6>
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="Mark all">
+                                        <button type="button" class="btn btn-outline-success" id="markAllPresentBtn">All Present</button>
+                                        <button type="button" class="btn btn-outline-danger" id="markAllAbsentBtn">All Absent</button>
+                                        <button type="button" class="btn btn-outline-warning" id="markAllLateBtn">All Late</button>
+                                    </div>
+                                </div>
+                                <div class="border rounded p-2" style="max-height: 360px; overflow-y: auto;">
+                                    <table class="table table-sm align-middle mb-0" id="attendanceStudentsTable">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 18%;">Student ID</th>
+                                                <th>Student Name</th>
+                                                <th style="width: 22%;">Status</th>
+                                                <th style="width: 30%;">Remarks</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="4" class="text-center py-3 text-muted">Select program, semester, and subject, then students will appear here.</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="mt-3">
+                                    <small class="text-muted">Students are filtered by Program (course) and Semester from their profile.</small>
                                 </div>
                             </div>
                             <div class="modal-footer">
@@ -256,102 +318,249 @@ const AttendancePage = (function() {
                 </div>
             </div>
         `;
-        
+
         // Add modal to the DOM
         document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
-        // Initialize the modal
-        const modal = new bootstrap.Modal(document.getElementById('markAttendanceModal'));
+
+        const modalEl = document.getElementById('markAttendanceModal');
+        const modal = new bootstrap.Modal(modalEl);
         modal.show();
-        
-        // Handle mark all present/absent buttons
-        document.getElementById('markAllPresentBtn')?.addEventListener('click', function() {
-            document.querySelectorAll('.status-radio').forEach(input => {
-                if (input.value === 'Present') input.checked = true;
+
+        const programSelect = document.getElementById('attendanceProgram');
+        const semesterSelect = document.getElementById('attendanceSemester');
+        const subjectSelect = document.getElementById('attendanceSubject');
+        const tableBody = document.querySelector('#attendanceStudentsTable tbody');
+
+        function refreshSubjects() {
+            const programId = programSelect.value;
+            subjectSelect.innerHTML = '<option value="">Select Subject</option>';
+            const program = programs.find(p => p.id === programId);
+            if (!program || !Array.isArray(program.courses)) return;
+            program.courses.forEach(course => {
+                const opt = document.createElement('option');
+                opt.value = course.code || '';
+                opt.textContent = `${course.code || ''} - ${course.name || ''}`.trim();
+                opt.dataset.subjectName = course.name || '';
+                subjectSelect.appendChild(opt);
+            });
+        }
+
+        async function loadEnrolledStudents(programName, semester, subjectCode) {
+            const out = [];
+            try {
+                if (window.FirebaseAPI?.listStudents && window.FirebaseAPI?.getStudentEnrolments) {
+                    const list = await window.FirebaseAPI.listStudents();
+                    if (Array.isArray(list)) {
+                        for (const s of list) {
+                            if (!s || s.role !== 'student') continue;
+                            if (programName && s.course !== programName) continue;
+                            if (semester && s.semester !== semester) continue;
+                            const enrolments = await window.FirebaseAPI.getStudentEnrolments(s.uid);
+                            if (Array.isArray(enrolments) && enrolments.some(e => (e.code === subjectCode) && (!e.semester || e.semester === semester))) {
+                                out.push({
+                                    uid: s.uid,
+                                    studentId: s.studentId || s.id || s.uid,
+                                    fullName: s.fullName || s.name || 'Student'
+                                });
+                            }
+                        }
+                    }
+                } else {
+                    const studentsLS = JSON.parse(localStorage.getItem('students') || '[]');
+                    studentsLS.forEach(s => {
+                        if (!s) return;
+                        if (programName && s.course !== programName) return;
+                        if (semester && s.semester !== semester) return;
+                        const enrolments = Array.isArray(s.enrolments) ? s.enrolments : [];
+                        if (enrolments.some(e => (e.code === subjectCode) && (!e.semester || e.semester === semester))) {
+                            out.push({
+                                uid: s.uid || s.id,
+                                studentId: s.studentId || s.id,
+                                fullName: s.fullName || 'Student'
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to load enrolled students for attendance', e);
+            }
+            return out;
+        }
+
+        async function refreshStudentsTable() {
+            const programId = programSelect.value;
+            const semester = semesterSelect.value;
+            const subjectCode = subjectSelect.value;
+            if (!programId || !semester || !subjectCode) {
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">Select program, semester, and subject above.</td></tr>';
+                return;
+            }
+            const program = programs.find(p => p.id === programId);
+            const programName = program ? program.name : '';
+
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">Loading students enrolled in this subject...</td></tr>';
+            const filtered = await loadEnrolledStudents(programName, semester, subjectCode);
+            if (!filtered || filtered.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No students found who are enrolled in this subject for the selected semester.</td></tr>';
+                return;
+            }
+            tableBody.innerHTML = filtered.map(s => `
+                <tr data-student-id="${s.studentId || ''}" data-student-name="${s.fullName || ''}">
+                    <td>${s.studentId || '-'}</td>
+                    <td>${s.fullName || '-'}</td>
+                    <td>
+                        <select class="form-select form-select-sm attendance-status">
+                            <option value="Present">Present</option>
+                            <option value="Absent">Absent</option>
+                            <option value="Late">Late</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm attendance-remarks" placeholder="Optional remarks">
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        programSelect.addEventListener('change', () => {
+            refreshSubjects();
+            refreshStudentsTable();
+        });
+        semesterSelect.addEventListener('change', () => { refreshStudentsTable(); });
+        subjectSelect.addEventListener('change', () => { refreshStudentsTable(); });
+
+        document.getElementById('markAllPresentBtn')?.addEventListener('click', () => {
+            document.querySelectorAll('#attendanceStudentsTable .attendance-status').forEach(sel => {
+                sel.value = 'Present';
             });
         });
-        document.getElementById('markAllAbsentBtn')?.addEventListener('click', function() {
-            document.querySelectorAll('.status-radio').forEach(input => {
-                if (input.value === 'Absent') input.checked = true;
+        document.getElementById('markAllAbsentBtn')?.addEventListener('click', () => {
+            document.querySelectorAll('#attendanceStudentsTable .attendance-status').forEach(sel => {
+                sel.value = 'Absent';
             });
         });
-        
-        // Handle form submission
+        document.getElementById('markAllLateBtn')?.addEventListener('click', () => {
+            document.querySelectorAll('#attendanceStudentsTable .attendance-status').forEach(sel => {
+                sel.value = 'Late';
+            });
+        });
+
         document.getElementById('markAttendanceForm')?.addEventListener('submit', function(e) {
             e.preventDefault();
             saveAttendance();
         });
-        
-        // Remove modal from DOM when hidden
-        document.getElementById('markAttendanceModal').addEventListener('hidden.bs.modal', function() {
+
+        modalEl.addEventListener('hidden.bs.modal', function() {
             this.remove();
         });
     }
-    
-    // Save attendance
-    function saveAttendance() {
+
+    // Save attendance (admin)
+    async function saveAttendance() {
         const date = document.getElementById('attendanceDate').value;
-        const remarks = document.getElementById('attendanceRemarks').value;
-        const students = JSON.parse(localStorage.getItem('students') || '[]');
-        
-        if (!date) {
-            showAlert('Please select a date', 'danger');
+        const programId = document.getElementById('attendanceProgram').value;
+        const semester = document.getElementById('attendanceSemester').value;
+        const subjectCode = document.getElementById('attendanceSubject').value;
+        const subjectSelect = document.getElementById('attendanceSubject');
+        const subjectName = subjectSelect.options[subjectSelect.selectedIndex]?.text.split(' - ').slice(1).join(' - ') || '';
+
+        if (!date || !programId || !semester || !subjectCode) {
+            showAlert('Please fill in date, program, semester, and subject before saving.', 'danger');
             return;
         }
-        
+
+        const programs = JSON.parse(localStorage.getItem('programs') || '[]');
+        const program = programs.find(p => p.id === programId);
+        const programName = program ? program.name : '';
+
         const attendance = JSON.parse(localStorage.getItem('attendance') || '[]');
-        const currentAttendance = [];
-        
-        // Remove existing attendance for this date
-        const filteredAttendance = attendance.filter(record => record.date !== date);
-        
-        // Add new attendance records from radio selection per student
-        students.forEach(s => {
-            const selected = document.querySelector(`input[name="status-${s.id}"]:checked`);
-            if (!selected) return;
-            currentAttendance.push({
+        const updated = [];
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+
+        // Keep all other records, but remove any for same date + program + semester + subject
+        const filteredAttendance = attendance.filter(r => !(
+            r.date === date &&
+            r.programId === programId &&
+            r.semester === semester &&
+            r.subjectCode === subjectCode
+        ));
+
+        document.querySelectorAll('#attendanceStudentsTable tbody tr[data-student-id]').forEach(row => {
+            const studentId = row.getAttribute('data-student-id') || '';
+            const studentName = row.getAttribute('data-student-name') || '';
+            const statusSel = row.querySelector('.attendance-status');
+            const remarksInput = row.querySelector('.attendance-remarks');
+            if (!statusSel) return;
+            const status = statusSel.value || 'Present';
+            const remarks = remarksInput?.value.trim() || '';
+
+            updated.push({
                 id: 'ATT' + Date.now() + Math.floor(Math.random() * 1000),
-                studentId: s.id,
-                date: date,
-                status: selected.value,
-                remarks: remarks,
+                date,
+                studentId,
+                studentName,
+                programId,
+                programName,
+                semester,
+                subjectCode,
+                subjectName,
+                status,
+                remarks,
+                markedBy: currentUser?.email || '',
                 markedAt: new Date().toISOString()
             });
         });
-        
-        // Save to localStorage
-        localStorage.setItem('attendance', JSON.stringify([...filteredAttendance, ...currentAttendance]));
-        
-        // Close the modal
+
+        localStorage.setItem('attendance', JSON.stringify([...filteredAttendance, ...updated]));
+
+        // Save to Firebase if available
+        try {
+            if (window.FirebaseAPI?.saveAttendanceRecords && updated.length > 0) {
+                await window.FirebaseAPI.saveAttendanceRecords(updated);
+            }
+        } catch (e) {
+            console.error('Failed to save attendance records to Firebase', e);
+        }
+
         const modal = bootstrap.Modal.getInstance(document.getElementById('markAttendanceModal'));
         if (modal) modal.hide();
-        
-        // Reload the attendance list
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        if (currentUser.role === 'admin') {
-            loadAdminAttendance();
-        } else {
-            loadStudentAttendance(currentUser.id);
+
+        // Reload admin list
+        loadAdminAttendance();
+
+        showAlert(`Attendance saved for ${updated.length} students.`, 'success');
+        if (updated.length > 0 && currentUser && currentUser.email) {
+            App.logActivity(`Marked attendance for ${updated.length} students on ${formatDate(date)}`, currentUser.email);
         }
-        
-        // Show success message
-        showAlert('Attendance saved successfully!', 'success');
-        
-        // Log the activity
-        App.logActivity(`Marked attendance for ${currentAttendance.length} students on ${formatDate(date)}`, currentUser.email);
     }
     
     // View attendance details for a specific date
-    function viewAttendanceDetails(date) {
+    async function viewAttendanceDetails(date) {
         const attendance = JSON.parse(localStorage.getItem('attendance') || '[]')
             .filter(record => record.date === date);
-        
-        const students = JSON.parse(localStorage.getItem('students') || '{}');
-        
+
+        let studentsArr = [];
+        try {
+            if (window.FirebaseAPI?.listStudents) {
+                const list = await window.FirebaseAPI.listStudents();
+                if (Array.isArray(list)) studentsArr = list;
+            } else {
+                const ls = JSON.parse(localStorage.getItem('students') || '[]');
+                if (Array.isArray(ls)) studentsArr = ls;
+            }
+        } catch (e) {
+            console.error('Failed to load students for attendance details', e);
+            const fallback = JSON.parse(localStorage.getItem('students') || '[]');
+            if (Array.isArray(fallback)) studentsArr = fallback;
+        }
+
         // Create a map of student IDs to student objects for faster lookup
         const studentMap = {};
-        students.forEach(student => {
-            studentMap[student.id] = student;
+        studentsArr.forEach(student => {
+            if (!student) return;
+            const sid = student.studentId || student.id || student.uid;
+            if (!sid) return;
+            studentMap[sid] = student;
         });
         
         // Generate attendance rows

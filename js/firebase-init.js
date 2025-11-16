@@ -64,6 +64,39 @@ async function listStudents() {
   return out;
 }
 
+// Activity log helpers
+async function saveLog(entry) {
+  if (!entry) return;
+  const id = entry.id || ('LOG' + Date.now() + Math.floor(Math.random() * 1000));
+  const log = {
+    id,
+    action: entry.action || 'Activity',
+    type: entry.type || 'info',
+    userEmail: entry.userEmail || 'System',
+    timestamp: entry.timestamp || new Date().toISOString(),
+    details: entry.details != null ? (typeof entry.details === 'string' ? entry.details : JSON.stringify(entry.details)) : ''
+  };
+  await set(ref(db, `logs/${id}`), log);
+  return log;
+}
+
+async function listLogs() {
+  const snap = await get(ref(db, 'logs'));
+  const out = [];
+  if (snap.exists()) {
+    snap.forEach(child => {
+      const v = child.val();
+      if (v) out.push({ ...v, id: v.id || child.key });
+    });
+  }
+  out.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  return out;
+}
+
+async function clearAllLogs() {
+  await set(ref(db, 'logs'), null);
+}
+
 // Announcements helpers
 async function listAnnouncements() {
   const snap = await get(ref(db, 'announcements'));
@@ -238,4 +271,5 @@ window.FirebaseAPI = {
   getStudentEnrolments, saveStudentEnrolments,
   saveAttendanceRecords, listAttendanceForStudent,
   listAnnouncements, saveAnnouncement, deleteAnnouncement,
+  saveLog, listLogs, clearAllLogs,
 };

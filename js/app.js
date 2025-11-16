@@ -75,20 +75,24 @@ const App = (function() {
         if (logoutBtn) logoutBtn.style.display = isLoggedIn ? 'inline-block' : 'none';
     }
 
-    // Log activity entries to localStorage
-    // action: short description, userEmail: actor identity, type: info|success|warning|error|security, details: optional JSON-serializable context
-    function logActivity(action, userEmail, type = 'info', details = null) {
-        const logs = JSON.parse(localStorage.getItem('activityLogs') || '[]');
+    // Log activity (primary: Firebase /logs, fallback: console only)
+    async function logActivity(action, userEmail, type = 'info', details = null) {
         const entry = {
-            id: 'LOG' + Date.now() + Math.floor(Math.random() * 1000),
             action: action || 'Activity',
             type: type || 'info',
-            userEmail: userEmail || 'System',
+            userEmail: userEmail || (currentUser && currentUser.email) || 'System',
             timestamp: new Date().toISOString(),
-            details: details != null ? (typeof details === 'string' ? details : JSON.stringify(details)) : ''
+            details
         };
-        logs.unshift(entry);
-        localStorage.setItem('activityLogs', JSON.stringify(logs));
+        try {
+            if (window.FirebaseAPI?.saveLog) {
+                await window.FirebaseAPI.saveLog(entry);
+            } else {
+                console.log('[ActivityLog]', entry);
+            }
+        } catch (e) {
+            console.error('Failed to save activity log to Firebase', e, entry);
+        }
     }
 
     // Handle navigation
@@ -163,7 +167,15 @@ const App = (function() {
             studentCount = Array.isArray(studentsLS) ? studentsLS.length : 0;
         }
         const programs = JSON.parse(localStorage.getItem('programs') || '[]');
-        const logs = JSON.parse(localStorage.getItem('activityLogs') || '[]').slice(0, 5);
+        let logs = [];
+        try {
+            if (window.FirebaseAPI?.listLogs) {
+                const allLogs = await window.FirebaseAPI.listLogs();
+                logs = Array.isArray(allLogs) ? allLogs.slice(0, 5) : [];
+            }
+        } catch (e) {
+            console.error('Failed to load activity logs for admin dashboard', e);
+        }
         const announcements = JSON.parse(localStorage.getItem('announcements') || '[]').slice(0, 3);
         
         // Render dashboard
