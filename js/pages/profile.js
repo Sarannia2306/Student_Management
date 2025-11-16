@@ -286,7 +286,7 @@ function saveAdminProfile(currentUser, formData) {
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label for="adminId" class="form-label">Admin ID</label>
-                                        <input type="text" class="form-control" id="adminId" value="${admin.id || ''}" readonly>
+                                        <input type="text" class="form-control" id="adminId" value="${admin.adminId || admin.id || ''}" readonly>
                                     </div>
                                 </div>
                                 <div class="row">
