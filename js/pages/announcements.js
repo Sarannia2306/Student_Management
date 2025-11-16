@@ -1,22 +1,43 @@
 // Announcements Page Module
 const AnnouncementsPage = (function() {
-    function init() {
+    async function init() {
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        renderPage(currentUser);
+        await renderPage(currentUser);
         bindEvents(currentUser);
     }
 
-    function getAnnouncements() {
+    async function getAnnouncements() {
+        try {
+            if (window.FirebaseAPI?.listAnnouncements) {
+                const list = await window.FirebaseAPI.listAnnouncements();
+                localStorage.setItem('announcements', JSON.stringify(list));
+                return list;
+            }
+        } catch (e) {
+            console.error('Failed to load announcements from Firebase', e);
+        }
         return JSON.parse(localStorage.getItem('announcements') || '[]');
     }
 
-    function saveAnnouncements(list) {
+    async function saveAnnouncements(list) {
         localStorage.setItem('announcements', JSON.stringify(list));
+        try {
+            if (window.FirebaseAPI?.saveAnnouncement) {
+                // Save each announcement; in practice we'll usually append one
+                for (const a of list) {
+                    if (a && a.id) {
+                        await window.FirebaseAPI.saveAnnouncement(a);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to sync announcements to Firebase', e);
+        }
     }
 
-    function renderPage(currentUser) {
+    async function renderPage(currentUser) {
         const isAdmin = currentUser.role === 'admin';
-        const list = getAnnouncements();
+        const list = await getAnnouncements();
 
         const formHTML = isAdmin ? `
             <div class="card mb-4">
@@ -81,13 +102,12 @@ const AnnouncementsPage = (function() {
         if (isAdmin) {
             const form = document.getElementById('announcementForm');
             if (form) {
-                form.addEventListener('submit', function(e) {
+                form.addEventListener('submit', async function(e) {
                     e.preventDefault();
                     const title = document.getElementById('announcementTitle').value.trim();
                     const body = document.getElementById('announcementBody').value.trim();
                     if (!title || !body) return;
 
-                    const list = getAnnouncements();
                     const item = {
                         id: 'ANN' + Date.now(),
                         title,
@@ -96,27 +116,48 @@ const AnnouncementsPage = (function() {
                         createdBy: currentUser.email,
                         audience: 'all'
                     };
-                    list.unshift(item);
-                    saveAnnouncements(list);
 
-                    App.logActivity('Created announcement', currentUser.email);
+                    // Save to Firebase (if available)
+                    try {
+                        if (window.FirebaseAPI?.saveAnnouncement) {
+                            await window.FirebaseAPI.saveAnnouncement(item);
+                        }
+                    } catch (e) {
+                        console.error('Failed to save announcement to Firebase', e);
+                    }
+
+                    // Update local cache for immediate UI
+                    const list = JSON.parse(localStorage.getItem('announcements') || '[]');
+                    list.unshift(item);
+                    localStorage.setItem('announcements', JSON.stringify(list));
+
+                    App.logActivity('Created announcement', currentUser.email, 'success', {
+                        id: item.id,
+                        title: item.title,
+                        audience: item.audience
+                    });
 
                     // Re-render
                     renderPage(currentUser);
-                    bindEvents(currentUser);
                 });
             }
 
-            document.addEventListener('click', function onClick(e) {
+            document.addEventListener('click', async function onClick(e) {
                 const btn = e.target.closest('[data-action="delete-ann"]');
                 if (!btn) return;
                 const id = btn.getAttribute('data-id');
-                let list = getAnnouncements();
+                let list = await getAnnouncements();
                 list = list.filter(a => a.id !== id);
-                saveAnnouncements(list);
-                App.logActivity('Deleted announcement', currentUser.email);
+                localStorage.setItem('announcements', JSON.stringify(list));
+                try {
+                    if (window.FirebaseAPI?.deleteAnnouncement) {
+                        await window.FirebaseAPI.deleteAnnouncement(id);
+                    }
+                } catch (e) {
+                    console.error('Failed to delete announcement from Firebase', e);
+                }
+                App.logActivity('Deleted announcement', currentUser.email, 'warning', { id });
                 renderPage(currentUser);
-                bindEvents(currentUser);
             }, { once: true });
         }
     }

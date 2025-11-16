@@ -75,11 +75,24 @@ const App = (function() {
         if (logoutBtn) logoutBtn.style.display = isLoggedIn ? 'inline-block' : 'none';
     }
 
-    // Log activity entries to localStorage
-    function logActivity(action, userEmail) {
-        const logs = JSON.parse(localStorage.getItem('activityLogs') || '[]');
-        logs.unshift({ action, user: userEmail || 'System', timestamp: new Date().toISOString() });
-        localStorage.setItem('activityLogs', JSON.stringify(logs));
+    // Log activity (primary: Firebase /logs, fallback: console only)
+    async function logActivity(action, userEmail, type = 'info', details = null) {
+        const entry = {
+            action: action || 'Activity',
+            type: type || 'info',
+            userEmail: userEmail || (currentUser && currentUser.email) || 'System',
+            timestamp: new Date().toISOString(),
+            details
+        };
+        try {
+            if (window.FirebaseAPI?.saveLog) {
+                await window.FirebaseAPI.saveLog(entry);
+            } else {
+                console.log('[ActivityLog]', entry);
+            }
+        } catch (e) {
+            console.error('Failed to save activity log to Firebase', e, entry);
+        }
     }
 
     // Handle navigation
@@ -154,7 +167,16 @@ const App = (function() {
             studentCount = Array.isArray(studentsLS) ? studentsLS.length : 0;
         }
         const programs = JSON.parse(localStorage.getItem('programs') || '[]');
-        const logs = JSON.parse(localStorage.getItem('activityLogs') || '[]').slice(0, 5);
+        let logs = [];
+        try {
+            if (window.FirebaseAPI?.listLogs) {
+                const allLogs = await window.FirebaseAPI.listLogs();
+                logs = Array.isArray(allLogs) ? allLogs.slice(0, 5) : [];
+            }
+        } catch (e) {
+            console.error('Failed to load activity logs for admin dashboard', e);
+        }
+        const announcements = JSON.parse(localStorage.getItem('announcements') || '[]').slice(0, 3);
         
         // Render dashboard
         const dashboardHTML = `
@@ -216,12 +238,15 @@ const App = (function() {
                 </div>
             </div>
             
-            <!-- Recent Activities -->
-            <div class="row mt-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
+            <!-- Recent Activities & Announcements -->
+            <div class="row mt-4 g-4">
+                <div class="col-12 col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">Recent Activities</h5>
+                            <a href="#" class="btn btn-sm btn-outline-secondary" data-page="logs">
+                                View All
+                            </a>
                         </div>
                         <div class="card-body">
                             ${logs.length > 0 ? 
@@ -232,12 +257,37 @@ const App = (function() {
                                                 <p class="mb-1">${log.action}</p>
                                                 <small class="text-muted">${formatDateTime(log.timestamp)}</small>
                                             </div>
-                                            <small class="text-muted">By: ${log.user || 'System'}</small>
+                                            <small class="text-muted">By: ${(log.userEmail || log.user || 'System')}</small>
                                         </div>
                                     `).join('')}
                                 </div>`
                                 : '<p class="text-muted">No recent activities</p>'
                             }
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">Announcements</h5>
+                            <button class="btn btn-sm btn-primary" data-page="announcements">
+                                <i class="fas fa-bullhorn me-1"></i> Post Announcement
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            ${announcements.length > 0 ? `
+                                <div class="list-group list-group-flush">
+                                    ${announcements.map(a => `
+                                        <div class="list-group-item">
+                                            <div class="d-flex w-100 justify-content-between">
+                                                <h6 class="mb-1">${a.title}</h6>
+                                                <small class="text-muted">${new Date(a.createdAt).toLocaleString()}</small>
+                                            </div>
+                                            <p class="mb-1 small">${a.body}</p>
+                                            <small class="text-muted">By: ${a.createdBy || 'Admin'}</small>
+                                        </div>
+                                    `).join('')}
+                                </div>` : '<p class="text-muted mb-0">No announcements yet. Click "Post Announcement" to create one.</p>'}
                         </div>
                     </div>
                 </div>
@@ -258,8 +308,25 @@ const App = (function() {
     // Load student dashboard
     async function loadStudentDashboard() {
         const studentData = currentUser;
-        const attendance = getStudentAttendance(studentData.id);
-        const attendancePercentage = calculateAttendancePercentage(attendance);
+        const studentId = studentData.studentId || studentData.id || studentData.uid || '';
+        let attendance = [];
+        try {
+            if (window.FirebaseAPI?.listAttendanceForStudent && studentId) {
+                attendance = await window.FirebaseAPI.listAttendanceForStudent(studentId);
+            } else {
+                attendance = getStudentAttendance(studentId || studentData.id);
+            }
+        } catch (e) {
+            console.error('Failed to load attendance for student dashboard', e);
+            attendance = getStudentAttendance(studentId || studentData.id);
+        }
+
+        // Calculate attendance summary similar to Attendance page
+        const totalDays = attendance.length;
+        const presentDays = attendance.filter(r => r.status === 'Present').length;
+        const lateDays = attendance.filter(r => r.status === 'Late').length;
+        const absentDays = totalDays - presentDays - lateDays;
+        const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
         const lastLogin = studentData.lastLogin ? new Date(studentData.lastLogin).toLocaleString() : 'First login';
         const announcements = JSON.parse(localStorage.getItem('announcements') || '[]').slice(0, 5);
         
@@ -279,7 +346,7 @@ const App = (function() {
                                         </div>
                                         <div>
                                             <p class="mb-0 text-muted">Student ID</p>
-                                            <h5 class="mb-0">${studentData.id || 'N/A'}</h5>
+                                            <h5 class="mb-0">${studentData.studentId || studentData.id || 'N/A'}</h5>
                                         </div>
                                     </div>
                                 </div>
@@ -301,7 +368,7 @@ const App = (function() {
                                         </div>
                                         <div>
                                             <p class="mb-0 text-muted">Attendance</p>
-                                            <h5 class="mb-0">${attendancePercentage}%</h5>
+                                            <h5 class="mb-0">${attendancePercentage}% (P:${presentDays} L:${lateDays} A:${absentDays})</h5>
                                         </div>
                                     </div>
                                 </div>
@@ -310,13 +377,14 @@ const App = (function() {
                     </div>
                 </div>
             </div>
-            
+
             <div class="row">
                 <!-- Recent Attendance -->
                 <div class="col-md-6 mb-4">
                     <div class="card h-100">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">Recent Attendance</h5>
+                            <a href="#" class="btn btn-sm btn-outline-primary" data-page="attendance">View All</a>
                         </div>
                         <div class="card-body">
                             ${attendance.length > 0 ? `
@@ -330,16 +398,27 @@ const App = (function() {
                                         </thead>
                                         <tbody>
                                             ${attendance.slice(0, 5).map(record => {
-                                                const status = (record.status || '').toLowerCase();
-                                                const isPresent = status === 'present';
+                                                const statusRaw = record.status || '';
+                                                const status = statusRaw.toLowerCase();
+
+                                                let badgeClass = 'secondary';
+                                                let label = statusRaw;
+
+                                                if (status === 'present') {
+                                                    badgeClass = 'success';
+                                                    label = 'Present';
+                                                } else if (status === 'late') {
+                                                    badgeClass = 'warning';
+                                                    label = 'Late';
+                                                } else if (status === 'absent') {
+                                                    badgeClass = 'danger';
+                                                    label = 'Absent';
+                                                }
+
                                                 return `
                                                     <tr>
                                                         <td>${formatDate(record.date)}</td>
-                                                        <td>
-                                                            <span class="badge bg-${isPresent ? 'success' : 'danger'}">
-                                                                ${isPresent ? 'Present' : 'Absent'}
-                                                            </span>
-                                                        </td>
+                                                        <td><span class="badge bg-${badgeClass}">${label}</span></td>
                                                     </tr>
                                                 `;
                                             }).join('')}
@@ -464,6 +543,14 @@ const App = (function() {
                 ProgramsPage.init();
             } else {
                 console.error('ProgramsPage module not loaded');
+            }
+        },
+        subjects: () => {
+            // Initialize student subject enrolment page
+            if (typeof StudentSubjectsPage !== 'undefined') {
+                StudentSubjectsPage.init();
+            } else {
+                console.error('StudentSubjectsPage module not loaded');
             }
         },
         logs: () => {

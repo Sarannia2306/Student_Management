@@ -64,6 +64,64 @@ async function listStudents() {
   return out;
 }
 
+// Activity log helpers
+async function saveLog(entry) {
+  if (!entry) return;
+  const id = entry.id || ('LOG' + Date.now() + Math.floor(Math.random() * 1000));
+  const log = {
+    id,
+    action: entry.action || 'Activity',
+    type: entry.type || 'info',
+    userEmail: entry.userEmail || 'System',
+    timestamp: entry.timestamp || new Date().toISOString(),
+    details: entry.details != null ? (typeof entry.details === 'string' ? entry.details : JSON.stringify(entry.details)) : ''
+  };
+  await set(ref(db, `logs/${id}`), log);
+  return log;
+}
+
+async function listLogs() {
+  const snap = await get(ref(db, 'logs'));
+  const out = [];
+  if (snap.exists()) {
+    snap.forEach(child => {
+      const v = child.val();
+      if (v) out.push({ ...v, id: v.id || child.key });
+    });
+  }
+  out.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  return out;
+}
+
+async function clearAllLogs() {
+  await set(ref(db, 'logs'), null);
+}
+
+// Announcements helpers
+async function listAnnouncements() {
+  const snap = await get(ref(db, 'announcements'));
+  const out = [];
+  if (snap.exists()) {
+    snap.forEach(child => {
+      const v = child.val();
+      if (v) out.push(v);
+    });
+  }
+  // Newest first
+  out.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return out;
+}
+
+async function saveAnnouncement(announcement) {
+  if (!announcement || !announcement.id) throw new Error('Announcement with id is required');
+  await set(ref(db, `announcements/${announcement.id}`), announcement);
+}
+
+async function deleteAnnouncement(id) {
+  if (!id) return;
+  await set(ref(db, `announcements/${id}`), null);
+}
+
 // Programs helpers
 async function listPrograms() {
   const snap = await get(ref(db, 'programs'));
@@ -85,6 +143,52 @@ async function saveProgramRecord(id, data) {
 async function deleteProgramRecord(id) {
   if (!id) throw new Error('Program id is required');
   await set(ref(db, `programs/${id}`), null);
+}
+
+// Student enrolment helpers
+async function getStudentEnrolments(uid) {
+  if (!uid) throw new Error('Student uid is required');
+  const snap = await get(ref(db, `students/${uid}/enrolments`));
+  if (!snap.exists()) return [];
+  const val = snap.val();
+  // We store enrolments as an array; ensure array on read
+  return Array.isArray(val) ? val : Object.values(val || {});
+}
+
+async function saveStudentEnrolments(uid, enrolments) {
+  if (!uid) throw new Error('Student uid is required');
+  const list = Array.isArray(enrolments) ? enrolments : [];
+  await set(ref(db, `students/${uid}/enrolments`), list);
+}
+
+// Attendance helpers: save a batch of attendance records under /attendance/{id}
+async function saveAttendanceRecords(records) {
+  if (!Array.isArray(records)) return;
+  const ops = records.map(rec => {
+    if (!rec || !rec.id) return Promise.resolve();
+    return set(ref(db, `attendance/${rec.id}`), rec);
+  });
+  await Promise.all(ops);
+}
+
+// List attendance records for a specific studentId
+async function listAttendanceForStudent(studentId) {
+  if (!studentId) return [];
+  const snap = await get(ref(db, 'attendance'));
+  const out = [];
+  if (snap.exists()) {
+    snap.forEach(child => {
+      const v = child.val();
+      if (v && v.studentId === studentId) out.push(v);
+    });
+  }
+  // Sort newest first by date then markedAt
+  out.sort((a, b) => {
+    const dA = new Date(a.date || a.markedAt || 0);
+    const dB = new Date(b.date || b.markedAt || 0);
+    return dB - dA;
+  });
+  return out;
 }
 
 // Hash a string with SHA-256 and return hex
@@ -153,34 +257,19 @@ async function updateAuthPhotoURL(url) {
   await updateProfile(auth.currentUser, { photoURL: url });
 }
 
-// Backend OTP helpers (configure endpoints to your PHP scripts)
-async function sendOtp({ uid, email }) {
-  const res = await fetch('/api/send-otp.php', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uid, email })
-  });
-  if (!res.ok) throw new Error('Failed to send verification code');
-  return res.json().catch(() => ({}));
-}
-
-async function verifyOtp({ uid, code }) {
-  const res = await fetch('/api/verify-otp.php', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uid, code })
-  });
-  if (!res.ok) throw new Error('Invalid or expired verification code');
-  return res.json().catch(() => ({}));
-}
 
 window.FirebaseAPI = {
   app, auth, db,
   signIn, registerUser, doSignOut, getUserProfile, setUserProfile, updateUserProfile,
   listStudents, listPrograms, saveProgramRecord, deleteProgramRecord,
   onAuthStateChanged,
-  sendOtp, verifyOtp,
   sendVerificationEmailNow,
   reloadCurrentUser,
   sha256Hex, icExists, setIcIndex,
   uploadProfilePhoto, updateAuthPhotoURL,
   sendPasswordReset,
+  getStudentEnrolments, saveStudentEnrolments,
+  saveAttendanceRecords, listAttendanceForStudent,
+  listAnnouncements, saveAnnouncement, deleteAnnouncement,
+  saveLog, listLogs, clearAllLogs,
 };

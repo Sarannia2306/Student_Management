@@ -53,6 +53,7 @@ const Navigation = (function() {
                                         <i class="fas fa-history me-1"></i> Activity Logs
                                     </a>
                                 </li>
+                                
                             ` : `
                                 <!-- Student Navigation -->
                                 <li class="nav-item student-only">
