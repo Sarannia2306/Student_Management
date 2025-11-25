@@ -615,9 +615,6 @@ const App = (function() {
         }
     }
 
-    // ... (rest of the code remains the same)
-
-    // Utility: ensure no stuck Bootstrap modal/backdrop blocks the UI
     function cleanupModals() {
         try {
             // Hide any visible modals
