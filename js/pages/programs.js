@@ -6,13 +6,14 @@ const ProgramsPage = (function() {
         setupEventListeners();
     }
 
-    // Load programs data 
+    // Load programs data (Firebase first, fallback to localStorage)
     function loadPrograms(searchTerm = '', departmentFilter = '', levelFilter = '') {
         const useFirebase = !!window.FirebaseAPI?.listPrograms;
 
         const render = (programsRaw) => {
             let programs = Array.isArray(programsRaw) ? programsRaw : [];
 
+            // If no programs exist (and not using Firebase), create sample data for demo
             if (!useFirebase && programs.length === 0) {
                 programs = [
                 {
@@ -247,14 +248,33 @@ const ProgramsPage = (function() {
     }
     
     // Show add/edit program modal
-    function showProgramForm(programId = null) {
+    async function showProgramForm(programId = null) {
         let program = null;
         let isEdit = false;
         
         if (programId) {
-            const programs = JSON.parse(localStorage.getItem('programs') || '[]');
-            program = programs.find(p => p.id === programId);
+            const useFirebase = !!window.FirebaseAPI?.listPrograms;
             isEdit = true;
+            
+            try {
+                if (useFirebase) {
+                    // Fetch programs from Firebase
+                    const programs = await window.FirebaseAPI.listPrograms();
+                    program = programs.find(p => p.id === programId);
+                } else {
+                    // Fetch from localStorage
+                    const programs = JSON.parse(localStorage.getItem('programs') || '[]');
+                    program = programs.find(p => p.id === programId);
+                }
+                
+                if (!program) {
+                    showAlert('Program not found', 'danger');
+                    return;
+                }
+            } catch (err) {
+                showAlert('Failed to load program: ' + (err?.message || err), 'danger');
+                return;
+            }
         }
         
         // Prepare existing subjects (courses) if any
@@ -271,6 +291,16 @@ const ProgramsPage = (function() {
                 </td>
             </tr>
         `).join('');
+
+        // Remove any existing modal first
+        const existingModal = document.getElementById('programFormModal');
+        if (existingModal) {
+            const existingModalInstance = bootstrap.Modal.getInstance(existingModal);
+            if (existingModalInstance) {
+                existingModalInstance.hide();
+            }
+            existingModal.remove();
+        }
 
         const modalHTML = `
             <div class="modal fade" id="programFormModal" tabindex="-1" aria-labelledby="programFormModalLabel" aria-hidden="true">
@@ -645,7 +675,7 @@ const ProgramsPage = (function() {
         const modal = bootstrap.Modal.getInstance(document.getElementById('programFormModal'));
         if (modal) modal.hide();
         
-        // Reload the programs list
+        // Reload the programs list to show updated data
         loadPrograms();
         
         // Show success message
@@ -722,13 +752,43 @@ const ProgramsPage = (function() {
     }
     
     // View program details
-    function viewProgramDetails(programId) {
-        const programs = JSON.parse(localStorage.getItem('programs') || '[]');
-        const program = programs.find(p => p.id === programId);
+    async function viewProgramDetails(programId) {
+        const useFirebase = !!window.FirebaseAPI?.listPrograms;
+        let program = null;
         
-        if (!program) {
-            showAlert('Program not found', 'danger');
+        try {
+            if (useFirebase) {
+                // Fetch programs from Firebase
+                const programs = await window.FirebaseAPI.listPrograms();
+                program = programs.find(p => p.id === programId);
+            } else {
+                // Fetch from localStorage
+                const programs = JSON.parse(localStorage.getItem('programs') || '[]');
+                program = programs.find(p => p.id === programId);
+            }
+            
+            if (!program) {
+                showAlert('Program not found', 'danger');
+                return;
+            }
+        } catch (err) {
+            showAlert('Failed to load program: ' + (err?.message || err), 'danger');
             return;
+        }
+
+        // Get enrolled students count from the correct source
+        let enrolledStudentsCount = 0;
+        try {
+            if (useFirebase && window.FirebaseAPI?.listStudents) {
+                const students = await window.FirebaseAPI.listStudents();
+                enrolledStudentsCount = students.filter(s => s.programId === program.id).length;
+            } else {
+                const students = JSON.parse(localStorage.getItem('students') || '[]');
+                enrolledStudentsCount = students.filter(s => s.programId === program.id).length;
+            }
+        } catch (err) {
+            console.warn('Failed to load students count:', err);
+            enrolledStudentsCount = 0;
         }
 
         // Courses for this program (subjects nested under program)
@@ -745,6 +805,16 @@ const ProgramsPage = (function() {
                 </div>
             `).join('')
             : '<div class="text-muted">No courses assigned to this program.</div>';
+
+        // Remove any existing modal first
+        const existingModal = document.getElementById('programDetailsModal');
+        if (existingModal) {
+            const existingModalInstance = bootstrap.Modal.getInstance(existingModal);
+            if (existingModalInstance) {
+                existingModalInstance.hide();
+            }
+            existingModal.remove();
+        }
 
         const modalHTML = `
             <div class="modal fade" id="programDetailsModal" tabindex="-1" aria-labelledby="programDetailsModalLabel" aria-hidden="true">
@@ -833,7 +903,7 @@ const ProgramsPage = (function() {
                                         <div class="col-md-4 mb-3 mb-md-0">
                                             <div class="p-3 bg-light rounded">
                                                 <h3 class="text-primary mb-0">
-                                                    ${JSON.parse(localStorage.getItem('students') || '[]').filter(s => s.programId === program.id).length}
+                                                    ${enrolledStudentsCount}
                                                 </h3>
                                                 <p class="mb-0 text-muted">Enrolled Students</p>
                                             </div>
@@ -927,29 +997,32 @@ const ProgramsPage = (function() {
             });
         }
         
-        // View program details
-        document.addEventListener('click', function(e) {
-            // View program
-            if (e.target.closest('.view-program')) {
-                e.preventDefault();
-                const programId = e.target.closest('.view-program').getAttribute('data-id');
-                viewProgramDetails(programId);
-            }
-            
-            // Edit program
-            if (e.target.closest('.edit-program')) {
-                e.preventDefault();
-                const programId = e.target.closest('.edit-program').getAttribute('data-id');
-                showProgramForm(programId);
-            }
-            
-            // Delete program
-            if (e.target.closest('.delete-program')) {
-                e.preventDefault();
-                const programId = e.target.closest('.delete-program').getAttribute('data-id');
-                deleteProgram(programId);
-            }
-        });
+        // View program details - only add document listener once
+        if (!document._programActionsListenerBound) {
+            document._programActionsListenerBound = true;
+            document.addEventListener('click', function(e) {
+                // View program
+                if (e.target.closest('.view-program')) {
+                    e.preventDefault();
+                    const programId = e.target.closest('.view-program').getAttribute('data-id');
+                    viewProgramDetails(programId);
+                }
+                
+                // Edit program
+                if (e.target.closest('.edit-program')) {
+                    e.preventDefault();
+                    const programId = e.target.closest('.edit-program').getAttribute('data-id');
+                    showProgramForm(programId);
+                }
+                
+                // Delete program
+                if (e.target.closest('.delete-program')) {
+                    e.preventDefault();
+                    const programId = e.target.closest('.delete-program').getAttribute('data-id');
+                    deleteProgram(programId);
+                }
+            });
+        }
     }
     
     // Show alert message
