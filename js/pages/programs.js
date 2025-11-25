@@ -6,14 +6,13 @@ const ProgramsPage = (function() {
         setupEventListeners();
     }
 
-    // Load programs data (Firebase first, fallback to localStorage)
-    function loadPrograms(searchTerm = '') {
+    // Load programs data 
+    function loadPrograms(searchTerm = '', departmentFilter = '', levelFilter = '') {
         const useFirebase = !!window.FirebaseAPI?.listPrograms;
 
         const render = (programsRaw) => {
             let programs = Array.isArray(programsRaw) ? programsRaw : [];
 
-            // If no programs exist (and not using Firebase), create sample data for demo
             if (!useFirebase && programs.length === 0) {
                 programs = [
                 {
@@ -54,14 +53,45 @@ const ProgramsPage = (function() {
                 localStorage.setItem('programs', JSON.stringify(programs));
             } catch (_) {}
 
-        // Filter programs if search term is provided
+        // Build dynamic filter option lists from all programs
+        const departmentOptions = Array.from(new Set(
+            programs
+                .map(p => (p && p.department ? String(p.department).trim() : ''))
+                .filter(v => v)
+        )).sort((a, b) => a.localeCompare(b));
+
+        const levelOptions = Array.from(new Set(
+            programs
+                .map(p => (p && p.level ? String(p.level).trim() : ''))
+                .filter(v => v)
+        )).sort((a, b) => a.localeCompare(b));
+
+        // Apply filters: search term, department, and level
         let filteredPrograms = [...programs];
+
+        // Text search across name, code, department
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filteredPrograms = programs.filter(program => 
+            filteredPrograms = filteredPrograms.filter(program => 
                 (program.name && program.name.toLowerCase().includes(term)) ||
                 (program.code && program.code.toLowerCase().includes(term)) ||
                 (program.department && program.department.toLowerCase().includes(term))
+            );
+        }
+
+        // Department filter
+        if (departmentFilter) {
+            const dep = departmentFilter.toLowerCase();
+            filteredPrograms = filteredPrograms.filter(program => 
+                program.department && program.department.toLowerCase() === dep
+            );
+        }
+
+        // Level filter
+        if (levelFilter) {
+            const lvl = levelFilter.toLowerCase();
+            filteredPrograms = filteredPrograms.filter(program => 
+                program.level && program.level.toLowerCase() === lvl
             );
         }
 
@@ -151,18 +181,17 @@ const ProgramsPage = (function() {
                             <div class="col-md-3">
                                 <select class="form-select" id="filterDepartment">
                                     <option value="">All Departments</option>
-                                    <option value="Computing">Computing</option>
-                                    <option value="Business">Business</option>
-                                    <option value="Engineering">Engineering</option>
+                                    ${departmentOptions.map(dep => `
+                                        <option value="${dep}" ${departmentFilter === dep ? 'selected' : ''}>${dep}</option>
+                                    `).join('')}
                                 </select>
                             </div>
                             <div class="col-md-3">
                                 <select class="form-select" id="filterLevel">
                                     <option value="">All Levels</option>
-                                    <option value="Foundation">Foundation</option>
-                                    <option value="Diploma">Diploma</option>
-                                    <option value="Degree">Degree</option>
-                                    <option value="Masters">Masters</option>
+                                    ${levelOptions.map(lvl => `
+                                        <option value="${lvl}" ${levelFilter === lvl ? 'selected' : ''}>${lvl}</option>
+                                    `).join('')}
                                 </select>
                             </div>
                         </div>
@@ -190,6 +219,18 @@ const ProgramsPage = (function() {
         
         // Re-attach event listeners
         setupEventListeners();
+
+        try {
+            const searchEl = document.getElementById('searchPrograms');
+            if (searchEl) {
+                const len = searchTerm ? String(searchTerm).length : 0;
+                searchEl.focus();
+                // Place caret at end
+                if (typeof searchEl.setSelectionRange === 'function') {
+                    searchEl.setSelectionRange(len, len);
+                }
+            }
+        } catch (_) {}
         };
 
         if (useFirebase) {
@@ -824,43 +865,50 @@ const ProgramsPage = (function() {
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         
         // Initialize the modal
-        const modal = new bootstrap.Modal(document.getElementById('programDetailsModal'));
+        const detailsEl = document.getElementById('programDetailsModal');
+        const modal = new bootstrap.Modal(detailsEl);
         modal.show();
-        
-        // Remove modal from DOM when hidden
-        document.getElementById('programDetailsModal').addEventListener('hidden.bs.modal', function() {
+
+        // Remove modal from DOM when hidden and restore scroll/backdrop state
+        detailsEl.addEventListener('hidden.bs.modal', function() {
+            try {
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+            } catch (_) {}
             this.remove();
         });
     }
     
     // Setup event listeners
     function setupEventListeners() {
+        // Helper to read current filter values and reload list
+        const applyFilters = () => {
+            const searchVal = document.getElementById('searchPrograms')?.value || '';
+            const deptVal = document.getElementById('filterDepartment')?.value || '';
+            const levelVal = document.getElementById('filterLevel')?.value || '';
+            loadPrograms(searchVal, deptVal, levelVal);
+        };
+
         // Search programs
         const searchInput = document.getElementById('searchPrograms');
-        if (searchInput) {
-            searchInput.addEventListener('input', function() {
-                loadPrograms(this.value);
-            });
+        if (searchInput && !searchInput._programsBound) {
+            searchInput._programsBound = true;
+            searchInput.addEventListener('input', applyFilters);
         }
         
         // Filter programs by department
         const filterDepartment = document.getElementById('filterDepartment');
-        if (filterDepartment) {
-            filterDepartment.addEventListener('change', function() {
-                // Implement department filtering if needed
-                // For now, just reload with search term
-                loadPrograms(document.getElementById('searchPrograms')?.value || '');
-            });
+        if (filterDepartment && !filterDepartment._programsBound) {
+            filterDepartment._programsBound = true;
+            filterDepartment.addEventListener('change', applyFilters);
         }
         
         // Filter programs by level
         const filterLevel = document.getElementById('filterLevel');
-        if (filterLevel) {
-            filterLevel.addEventListener('change', function() {
-                // Implement level filtering if needed
-                // For now, just reload with search term
-                loadPrograms(document.getElementById('searchPrograms')?.value || '');
-            });
+        if (filterLevel && !filterLevel._programsBound) {
+            filterLevel._programsBound = true;
+            filterLevel.addEventListener('change', applyFilters);
         }
         
         // Add program button
