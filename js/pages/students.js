@@ -175,6 +175,18 @@ const StudentsPage = (function() {
 
     // Show add/edit student modal
     async function showStudentForm(studentId = null) {
+        // Always start from a clean edit modal to avoid stale content
+        try {
+            const existingForm = document.getElementById('studentFormModal');
+            if (existingForm) {
+                try { (bootstrap.Modal.getInstance(existingForm) || new bootstrap.Modal(existingForm)).hide(); } catch(_) {}
+                document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                existingForm.remove();
+            }
+        } catch (_) {}
+
         let student = null;
         let isEdit = false;
         
@@ -925,45 +937,55 @@ const StudentsPage = (function() {
     
     // Setup event listeners
     function setupEventListeners() {
-        // Search students
+        // Search students (bind once per element)
         const searchInput = document.getElementById('searchStudents');
-        if (searchInput) {
+        if (searchInput && !searchInput._studentsBound) {
+            searchInput._studentsBound = true;
             searchInput.addEventListener('input', function() {
                 loadStudents(this.value);
             });
         }
-        
-        // Add student button
+
+        // Add student button (bind once per element)
         const addStudentBtn = document.getElementById('addStudentBtn');
-        if (addStudentBtn) {
+        if (addStudentBtn && !addStudentBtn._studentsBound) {
+            addStudentBtn._studentsBound = true;
             addStudentBtn.addEventListener('click', function() {
                 showStudentForm();
             });
         }
-        
-        // View student details
-        document.addEventListener('click', function(e) {
-            // View student
-            if (e.target.closest('.view-student')) {
-                e.preventDefault();
-                const studentId = e.target.closest('.view-student').getAttribute('data-id');
-                viewStudentDetails(studentId);
-            }
-            
-            // Edit student
-            if (e.target.closest('.edit-student')) {
-                e.preventDefault();
-                const studentId = e.target.closest('.edit-student').getAttribute('data-id');
-                showStudentForm(studentId);
-            }
-            
-            // Delete student
-            if (e.target.closest('.delete-student')) {
-                e.preventDefault();
-                const studentId = e.target.closest('.delete-student').getAttribute('data-id');
-                deleteStudent(studentId);
-            }
-        });
+
+        // Global click handler for row actions – bind only once on document
+        if (!document._studentsClickBound) {
+            document._studentsClickBound = true;
+            document.addEventListener('click', function(e) {
+                // View student
+                const viewLink = e.target.closest('.view-student');
+                if (viewLink) {
+                    e.preventDefault();
+                    const studentId = viewLink.getAttribute('data-id');
+                    if (studentId) viewStudentDetails(studentId);
+                    return;
+                }
+
+                // Edit student
+                const editLink = e.target.closest('.edit-student');
+                if (editLink) {
+                    e.preventDefault();
+                    const studentId = editLink.getAttribute('data-id');
+                    if (studentId) showStudentForm(studentId);
+                    return;
+                }
+
+                // Delete student
+                const deleteLink = e.target.closest('.delete-student');
+                if (deleteLink) {
+                    e.preventDefault();
+                    const studentId = deleteLink.getAttribute('data-id');
+                    if (studentId) deleteStudent(studentId);
+                }
+            });
+        }
     }
     
     // Show alert message
