@@ -593,6 +593,18 @@ const StudentsPage = (function() {
     
     // View student details
     async function viewStudentDetails(studentId) {
+        // Always start from a clean details modal to avoid stale content
+        try {
+            const existingDetails = document.getElementById('studentDetailsModal');
+            if (existingDetails) {
+                try { (bootstrap.Modal.getInstance(existingDetails) || new bootstrap.Modal(existingDetails)).hide(); } catch(_) {}
+                document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                existingDetails.remove();
+            }
+        } catch (_) {}
+
         let student = state.students.find(s => (s.uid && s.uid === studentId) || (s.id === studentId));
         // Fetch latest from Firebase to include guardian/status updates
         if ((!student || !student.guardian) && window.FirebaseAPI?.getUserProfile) {
